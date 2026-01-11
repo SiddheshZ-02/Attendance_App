@@ -1,12 +1,26 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Icon from 'react-native-vector-icons/Ionicons'; // Assuming you have react-native-vector-icons installed
 
 import Attendence from './../screen/home/Attendence';
 import Profile from '../screen/profile/Profile';
 
 const Tab = createBottomTabNavigator();
+
+const getIcon = (name: string) => {
+  switch (name) {
+    case 'Attendence':
+      return 'location-sharp';
+    case 'Profile':
+      return 'person-sharp';
+
+    default:
+      return 'help';
+    case 'Profile':
+      return 'person-sharp';
+  }
+};
 
 const CustomTabBar = ({ state, navigation }) => {
   return (
@@ -22,9 +36,16 @@ const CustomTabBar = ({ state, navigation }) => {
               onPress={() => navigation.navigate(route.name)}
               style={[styles.tabItem, isFocused && styles.activeTab]}
             >
-              <Text style={[styles.tabText, isFocused && styles.activeText]}>
-                {route.name}
-              </Text>
+              <Icon
+                name={getIcon(route.name)}
+                size={24}
+                color={isFocused ? '#0A3D91' : '#FFFFFF'}
+              />
+              {isFocused && (
+                <Text style={[styles.tabText, styles.activeText]}>
+                  {route.name}
+                </Text>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -42,7 +63,7 @@ const TabNavigator = () => {
       }}
     >
       <Tab.Screen name="Attendence" component={Attendence} />
-      <Tab.Screen name="Profile" component={Profile} />
+      <Tab.Screen options={{}} name="Profile" component={Profile} />
     </Tab.Navigator>
   );
 };
@@ -55,6 +76,7 @@ const styles = StyleSheet.create({
     bottom: 30,
     width: '60%',
     alignItems: 'center',
+    justifyContent: 'center',
     marginHorizontal: '20%',
   },
 
@@ -63,7 +85,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#a88a8aff',
     borderRadius: 40,
     padding: 6,
-    width: '90%',
+
     height: 60,
     alignItems: 'center',
 
@@ -80,12 +102,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
 
   tabText: {
-    color: '#FFFFFF', 
+    color: '#FFFFFF',
     fontWeight: '500',
     fontSize: 14,
+    marginRight: 8,
   },
 
   activeText: {

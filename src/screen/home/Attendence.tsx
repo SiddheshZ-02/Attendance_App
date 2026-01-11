@@ -8,6 +8,10 @@ import {
   View,
 } from 'react-native';
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import Icon1 from 'react-native-vector-icons/MaterialIcons';
+import Icon2 from 'react-native-vector-icons/Entypo';
 
 const { height } = Dimensions.get('window');
 
@@ -15,6 +19,7 @@ const Attendence = () => {
   const scale = useRef(new Animated.Value(1)).current;
   const [checkedIn, setCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const navigation = useNavigation();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -36,14 +41,35 @@ const Attendence = () => {
   };
 
   const formatDate = (date: Date) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+    const days = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
     const day = days[date.getDay()];
     const month = months[date.getMonth()];
     const dayNum = date.getDate();
     const year = date.getFullYear();
-    
+
     return `${month} ${dayNum}, ${year} · ${day}`;
   };
 
@@ -75,12 +101,15 @@ const Attendence = () => {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Hey Siddhesh !</Text>
-          <Text style={styles.subtitle}>
-            Good Morning Mark your Attendance
-          </Text>
+          <Text style={styles.subtitle}>Good Morning Mark your Attendance</Text>
         </View>
 
-        <TouchableOpacity style={styles.avatar} />
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={() => navigation.navigate('Profile' as never)}
+        >
+          <Icon name="user-circle" size={40} color="#b49e9e" />
+        </TouchableOpacity>
       </View>
 
       {/* Time Section */}
@@ -99,9 +128,8 @@ const Attendence = () => {
               onPress={handlePress}
               style={styles.middleRing}
             >
-              <Text style={[styles.text, { color: activeColor }]}>
-                {label}
-              </Text>
+              <Icon1 name="touch-app" size={40} color={activeColor} />
+              <Text style={[styles.text, { color: activeColor }]}>{label}</Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -110,16 +138,22 @@ const Attendence = () => {
       {/* Stats */}
       <View style={styles.stats}>
         <View style={styles.statItem}>
+          <Icon1 name="access-time-filled" size={24} color="#16A34A" />
+          <Icon2 name="dots-three-horizontal" size={24} color="#16A34A" />
           <Text style={styles.statValue}>00</Text>
-          <Text style={styles.statLabel}>Check In</Text>
+          <Text style={styles.statLabel}>Check In(First)</Text>
         </View>
 
         <View style={styles.statItem}>
+          <Icon1 name="access-time-filled" size={24} color="#DC2626" />
+          <Icon2 name="dots-three-horizontal" size={24} color="#DC2626" />
           <Text style={styles.statValue}>00</Text>
-          <Text style={styles.statLabel}>Check Out</Text>
+          <Text style={styles.statLabel}>Check Out(Last)</Text>
         </View>
 
         <View style={styles.statItem}>
+          <Icon1 name="more-time" size={24} color="#b49e9e" />
+          <Icon2 name="dots-three-horizontal" size={24} color="#b49e9e" />
           <Text style={styles.statValue}>00</Text>
           <Text style={styles.statLabel}>Total Hrs</Text>
         </View>
@@ -129,10 +163,6 @@ const Attendence = () => {
 };
 
 export default Attendence;
-
-// ... existing code ...
-
-// ... existing code ...
 
 
 const styles = StyleSheet.create({
@@ -159,10 +189,11 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    backgroundColor: '#b49e9e',
     height: 40,
     width: 40,
     borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   timeContainer: {
@@ -219,6 +250,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     fontWeight: '800',
+    top: 10,
   },
 
   stats: {

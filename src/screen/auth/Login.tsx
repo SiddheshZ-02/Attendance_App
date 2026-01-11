@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import React from 'react';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import Icon1 from 'react-native-vector-icons/Ionicons';
 
 const Login = () => {
   const navigation = useNavigation();
@@ -27,23 +29,26 @@ const Login = () => {
 
             {/* Username */}
             <View style={styles.field}>
-              {/* <Icon name="account" size={20} color="#fff" /> */}
+             
               <TextInput
                 placeholder="Username"
                 placeholderTextColor="#aaa"
                 style={styles.input}
               />
+               <Icon name="user" size={20} color="#d2d0d0ff" />
             </View>
 
             {/* Password */}
             <View style={styles.field}>
-              {/* <Icon name="lock" size={20} color="#fff" /> */}
+             
               <TextInput
                 placeholder="Password"
                 placeholderTextColor="#aaa"
                 secureTextEntry
                 style={styles.input}
               />
+               <Icon1 name="eye" size={20} color="#d2d0d0ff" />
+               <Icon1 name="eye-off" size={20} color="#d2d0d0ff" />
             </View>
 
             {/* Buttons */}
@@ -108,6 +113,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     elevation: 5,
+    paddingRight:30
   },
 
   input: {
@@ -155,7 +161,7 @@ const styles = StyleSheet.create({
   },
 
   forgotText: {
-    color: '#0300c8ff',
+    color: '#DC2626',
     textAlign: 'center',
     fontWeight: '500',
   },

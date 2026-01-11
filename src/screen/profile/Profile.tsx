@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import React from 'react';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/FontAwesome';
 
 const Profile = () => {
   const navigation = useNavigation();
@@ -17,7 +18,10 @@ const Profile = () => {
         <TouchableOpacity
           style={styles.avatarSmall}
           onPress={navigation.goBack}
-        />
+        >
+   
+          <Icon name="angle-left" size={40} color="#a88a8aff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity>
           <Text style={styles.logout}>Logout</Text>
@@ -25,7 +29,10 @@ const Profile = () => {
       </View>
 
       <View style={styles.profileSection}>
-        <TouchableOpacity style={styles.avatarLarge} />
+        <View style={styles.avatarLarge}>
+          <Icon name="user-circle" size={150} color="#a88a8aff" />
+        </View>
+
         <Text style={styles.name}>Siddhesh Zujam</Text>
       </View>
 
@@ -79,7 +86,8 @@ const styles = StyleSheet.create({
   },
 
   avatarSmall: {
-    backgroundColor: '#b49e9eff',
+    justifyContent: 'center',
+    alignItems: 'center',
     height: 40,
     width: 40,
     borderRadius: 20,
@@ -93,10 +101,10 @@ const styles = StyleSheet.create({
   },
 
   avatarLarge: {
-    height: 150,
-    width: 150,
-    backgroundColor: '#b49e9eff',
-    borderRadius: 100,
+    // height: 150,
+    // width: 150,
+    // backgroundColor: '#b49e9eff',
+    // borderRadius: 100,
   },
 
   name: {
