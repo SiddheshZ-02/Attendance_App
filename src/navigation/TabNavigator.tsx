@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Icon from 'react-native-vector-icons/Ionicons'; // Assuming you have react-native-vector-icons installed
+import Icon from 'react-native-vector-icons/Ionicons'; 
 
 import Attendence from './../screen/home/Attendence';
 import Profile from '../screen/profile/Profile';

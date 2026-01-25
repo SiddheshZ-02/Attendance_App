@@ -47,7 +47,7 @@ const Login = () => {
                 secureTextEntry
                 style={styles.input}
               />
-               <Icon1 name="eye" size={20} color="#d2d0d0ff" />
+               {/* <Icon1 name="eye" size={20} color="#d2d0d0ff" /> */}
                <Icon1 name="eye-off" size={20} color="#d2d0d0ff" />
             </View>
 

@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 import Index from './src/navigation/Index';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AppNavigator from './src/navigation/AppNavigator';
+
 
 const Stack = createNativeStackNavigator();
 
