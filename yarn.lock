@@ -5483,12 +5483,32 @@ react-native-android-location-enabler@^3.0.1:
   resolved "https://registry.yarnpkg.com/react-native-android-location-enabler/-/react-native-android-location-enabler-3.0.1.tgz#b263b1fbac1491888601ccff9ef88430a13dc7ed"
   integrity sha512-X4gHdEFf/dqSNhVDQ2cQUibnNRd6xIG34UGDMnwoCKIPLC2wYzALs/gPrDnjrAWsuxjaleZXwUIrX3o9nbtsgw==
 
+react-native-background-fetch@^4.3.0:
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/react-native-background-fetch/-/react-native-background-fetch-4.3.0.tgz#0296719989090f04d087b1f2a25e3b99a645ef09"
+  integrity sha512-ZeHI51pBeFEHGv+MTm+Ui8o75SvCLx3G6J4WVPH1LwAbS8TzWW1PBqa/3znHp2Ek0/yb2dYeKxE9X9rP7oiykA==
+
+react-native-device-info@^15.0.1:
+  version "15.0.1"
+  resolved "https://registry.yarnpkg.com/react-native-device-info/-/react-native-device-info-15.0.1.tgz#8a2716861bb8e491e0627f326bcc007c77d2e8f6"
+  integrity sha512-U5waZRXtT3l1SgZpZMlIvMKPTkFZPH8W7Ks6GrJhdH723aUIPxjVer7cRSij1mvQdOAAYFJV/9BDzlC8apG89A==
+
+react-native-geolocation-service@^5.3.1:
+  version "5.3.1"
+  resolved "https://registry.yarnpkg.com/react-native-geolocation-service/-/react-native-geolocation-service-5.3.1.tgz#4ce1017789da6fdfcf7576eb6f59435622af4289"
+  integrity sha512-LTXPtPNmrdhx+yeWG47sAaCgQc3nG1z+HLLHlhK/5YfOgfLcAb9HAkhREPjQKPZOUx8pKZMIpdGFUGfJYtimXQ==
+
 react-native-link@^4.1.0:
   version "4.1.0"
   resolved "https://registry.npmjs.org/react-native-link/-/react-native-link-4.1.0.tgz"
   integrity sha512-P82c/wb79HjpXwnxnukVwH6bfPgUXC5eG/18PaVhAUPbh3hwLPuP0drae5y2p53ufU9Acs1+FHNDhQ62KH2X5A==
   dependencies:
     react-native-url-handler "^0.4.2"
+
+react-native-permissions@^5.4.4:
+  version "5.4.4"
+  resolved "https://registry.yarnpkg.com/react-native-permissions/-/react-native-permissions-5.4.4.tgz#8a63b001fc0f9e88426c36b21a6fe379c4533b04"
+  integrity sha512-WB5lRCBGXETfuaUhem2vgOceb9+URCeyfKpLGFSwoOffLuyJCA6+NTR3l1KLkrK4Ykxsig37z16/shUVufmt7A==
 
 react-native-safe-area-context@^5.6.2:
   version "5.6.2"
