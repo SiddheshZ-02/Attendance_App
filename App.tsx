@@ -10,16 +10,16 @@ const Stack = createNativeStackNavigator();
 
 const App = () => {
   return (
-    <NavigationContainer>
-        <SafeAreaView style={{ flex: 1 }}>
-      <ToastProvider>
+    <SafeAreaView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <ToastProvider>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Index" component={Index} />
             {/* <Stack.Screen   name="App" component={AppNavigator} /> */}
           </Stack.Navigator>
-      </ToastProvider>
-        </SafeAreaView>
-    </NavigationContainer>
+        </ToastProvider>
+      </NavigationContainer>
+    </SafeAreaView>
   );
 };
 
