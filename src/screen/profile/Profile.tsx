@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../../services/api/apiConfig';
 
 const Profile = () => {
   const navigation = useNavigation();

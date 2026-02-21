@@ -27,7 +27,7 @@ import {
 } from 'react-native-permissions';
 import { useToast } from 'react-native-toast-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../../services/api/apiConfig';
 
 const { height } = Dimensions.get('window');
 
@@ -192,7 +192,7 @@ const Attendence = () => {
   // LIVE TOTAL HOURS UPDATE (while checked in)
   // ═══════════════════════════════════════════════════════════
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (checkedIn && attendanceStats.checkInDate) {
       interval = setInterval(() => {
         const now = new Date();
@@ -200,7 +200,9 @@ const Attendence = () => {
         setAttendanceStats(prev => ({ ...prev, totalHours: total }));
       }, 60000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [checkedIn, attendanceStats.checkInDate]);
 
   // ═══════════════════════════════════════════════════════════
@@ -363,7 +365,7 @@ const Attendence = () => {
       const age = Date.now() - lastKnownLocation.current.timestamp;
       if (age < 2 * 60 * 1000) {
         setLoadingMessage('Processing location...');
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(() => resolve(undefined), 300));
         return lastKnownLocation.current;
       }
     }
@@ -511,8 +513,8 @@ const Attendence = () => {
 
       toast.show(
         checkedIn
-          ? `✅ Checked out at ${formatTime(new Date())}`
-          : `✅ Checked in at ${formatTime(new Date())}`,
+          ? ` Checked out at ${formatTime(new Date())}`
+          : ` Checked in at ${formatTime(new Date())}`,
         { type: 'success', placement: 'top', duration: 3000 },
       );
     } catch (error: any) {
@@ -584,6 +586,18 @@ const Attendence = () => {
     return `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
   };
 
+  const getGreetingMessage = () => {
+    const currentHour = new Date().getHours();
+    
+    if (currentHour >= 5 && currentHour < 12) {
+      return "Good Morning, mark your Attendance";
+    } else if (currentHour >= 12 && currentHour < 17) {
+      return "Good Afternoon, mark your Attendance";
+    } else {
+      return "Good Evening, mark your Attendance";
+    }
+  };
+
   // ═══════════════════════════════════════════════════════════
   // ANIMATION
   // ═══════════════════════════════════════════════════════════
@@ -627,7 +641,7 @@ const Attendence = () => {
         <View>
           <Text style={styles.title}>Hey {userName}!</Text>
           <Text style={styles.subtitle}>
-            Good Morning, mark your Attendance
+            {getGreetingMessage()}
           </Text>
         </View>
         <View style={styles.dropdownContainer}>

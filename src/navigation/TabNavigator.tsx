@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons'; 
 
-import Attendence from './../screen/home/Attendence';
+import Attendence from '../screen/attendance/Attendance';
 import Profile from '../screen/profile/Profile';
 
 const Tab = createBottomTabNavigator();
@@ -22,11 +22,11 @@ const getIcon = (name: string) => {
   }
 };
 
-const CustomTabBar = ({ state, navigation }) => {
+const CustomTabBar = ({ state, navigation }: any) => {
   return (
     <View style={styles.wrapper}>
       <View style={styles.tabBar}>
-        {state.routes.map((route, index) => {
+        {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
 
           return (

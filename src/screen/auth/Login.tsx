@@ -18,9 +18,9 @@ import Icon1 from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from 'react-native-toast-notifications';
 
-import { getDeviceInfo } from '../../utils/deviceInfo';
-import { getCurrentLocation } from '../../utils/locationHelper';
-import { API_CONFIG } from '../../config/api';
+import { getDeviceInfo } from '../../services/device/deviceService';
+import { getCurrentLocation } from '../../services/location/locationService';
+import { API_CONFIG } from '../../services/api/apiConfig';
 
 const Login = () => {
   const navigation = useNavigation();
@@ -174,7 +174,7 @@ const Login = () => {
       };
 
       const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`,
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.AUTH.LOGIN}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

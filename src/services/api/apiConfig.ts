@@ -1,18 +1,15 @@
-// config/api.js
+// services/api/apiConfig.js
+
+import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 
 export const API_CONFIG = {
-  BASE_URL: 'https://attendance-backend-8755.onrender.com', // CHANGE TO YOUR SERVER IP
-  ENDPOINTS: {
-    LOGIN: '/api/auth/login',
-    REGISTER: '/api/auth/register',
-    PROFILE: '/api/auth/profile',
-    DEVICES: '/api/auth/devices'
-  }
+  BASE_URL: API_BASE_URL,
+  ENDPOINTS: API_ENDPOINTS
 };
 
 // Helper function for API calls
-export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
-  const headers = {
+export const apiCall = async (endpoint: string, method: string = 'GET', body: any = null, token: string | null = null) => {
+  const headers: { [key: string]: string } = {
     'Content-Type': 'application/json'
   };
   
@@ -20,7 +17,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const options = {
+  const options: RequestInit = {
     method,
     headers
   };
