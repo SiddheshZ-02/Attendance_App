@@ -7,7 +7,11 @@ export const STORAGE_KEYS = {
   USER_ROLE: 'userRole',
   EMPLOYEE_ID: 'employeeId',
   DEPARTMENT: 'department',
+<<<<<<< HEAD
   // DEVICE_FINGERPRINT: 'deviceFingerprint' - removed per user request
+=======
+  DEVICE_FINGERPRINT: 'deviceFingerprint'
+>>>>>>> f6a47b5dac2c78f36b61f82170660ea4c01127ee
 };
 
 export const PERMISSIONS = {

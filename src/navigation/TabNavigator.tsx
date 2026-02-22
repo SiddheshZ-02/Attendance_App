@@ -3,7 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from '
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 
+<<<<<<< HEAD
 import Attendance from '../screen/attendance/Attendance';
+=======
+import Attendence from '../screen/attendance/Attendance';
+>>>>>>> f6a47b5dac2c78f36b61f82170660ea4c01127ee
 import Profile from '../screen/profile/Profile';
 
 const Tab = createBottomTabNavigator();
@@ -21,6 +25,7 @@ const getIcon = (name: string) => {
 };
 
 const CustomTabBar = ({ state, navigation }: any) => {
+<<<<<<< HEAD
   const slideAnim = useRef(new Animated.Value(0)).current;
   const numTabs = state.routes.length;
   
@@ -40,9 +45,12 @@ const CustomTabBar = ({ state, navigation }: any) => {
     outputRange: [10, tabWidth * (numTabs - 1) + 10],
   });
 
+=======
+>>>>>>> f6a47b5dac2c78f36b61f82170660ea4c01127ee
   return (
     <View style={styles.container}>
       <View style={styles.tabBar}>
+<<<<<<< HEAD
         {/* Sliding Background */}
         <Animated.View
           style={[
@@ -55,6 +63,8 @@ const CustomTabBar = ({ state, navigation }: any) => {
         />
 
         {/* Tab Items */}
+=======
+>>>>>>> f6a47b5dac2c78f36b61f82170660ea4c01127ee
         {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
 
