@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../../services/api/apiConfig';
 
 const Profile = () => {
   const navigation = useNavigation();
@@ -85,10 +85,7 @@ const Profile = () => {
   const confirmLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const [token, deviceFingerprint] = await Promise.all([
-        AsyncStorage.getItem('authToken'),
-        AsyncStorage.getItem('deviceFingerprint'),
-      ]);
+      const token = await AsyncStorage.getItem('authToken');
 
       if (token) {
         try {
@@ -98,7 +95,8 @@ const Profile = () => {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ deviceId: deviceFingerprint || '' }),
+            // deviceId parameter removed - device info no longer collected
+            body: JSON.stringify({}),
           });
         } catch (apiError) {
           console.warn('⚠️ Logout API failed, clearing local anyway');
@@ -122,7 +120,7 @@ const Profile = () => {
       'userRole',
       'employeeId',
       'department',
-      'deviceFingerprint',
+      // 'deviceFingerprint' - removed per user request
     ]);
     navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
   };

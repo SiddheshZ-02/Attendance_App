@@ -1,4 +1,4 @@
-// utils/locationHelper.js
+// services/location/locationService.js
 
 import Geolocation from '@react-native-community/geolocation';
 

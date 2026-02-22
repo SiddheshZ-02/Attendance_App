@@ -18,9 +18,9 @@ import Icon1 from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from 'react-native-toast-notifications';
 
-import { getDeviceInfo } from '../../utils/deviceInfo';
-import { getCurrentLocation } from '../../utils/locationHelper';
-import { API_CONFIG } from '../../config/api';
+// Device info collection removed per user request
+import { getCurrentLocation } from '../../services/location/locationService';
+import { API_CONFIG } from '../../services/api/apiConfig';
 
 const Login = () => {
   const navigation = useNavigation();
@@ -95,7 +95,7 @@ const Login = () => {
       'userRole',
       'employeeId',
       'department',
-      'deviceFingerprint',
+      // 'deviceFingerprint' - removed per user request
     ]);
   };
 
@@ -145,25 +145,20 @@ const Login = () => {
     try {
       setIsLoading(true);
 
-      // STEP 1 — Device Info
-      setLoadingMessage('Collecting device info...');
-      const deviceInfo = await getDeviceInfo();
-      if (!deviceInfo) throw new Error('Unable to collect device information');
-      console.log('✅ Device info collected');
+      // STEP 1 — Skip device info collection (removed per user request)
 
       // STEP 2 — Location (optional)
-      setLoadingMessage('Getting location...');
+      // setLoadingMessage('Getting location...');
       const location = await getCurrentLocation();
       console.log(
         location ? '✅ Location collected' : '⚠️ Location not available',
       );
 
       // STEP 3 — Call /api/auth/login
-      setLoadingMessage('Authenticating...');
+      // setLoadingMessage('Authenticating...');
       const loginData = {
         email: email.trim().toLowerCase(),
         password,
-        deviceInfo,
         location: location
           ? {
               latitude: (location as any).latitude,
@@ -174,7 +169,7 @@ const Login = () => {
       };
 
       const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`,
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.AUTH.LOGIN}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -198,7 +193,7 @@ const Login = () => {
           ['userRole', data.data.role],
           ['employeeId', data.data.employeeId || ''],
           ['department', data.data.department || ''],
-          ['deviceFingerprint', deviceInfo.deviceId],
+          // deviceFingerprint removed per user request
         ]);
         console.log('✅ User data saved to storage');
 
@@ -256,12 +251,11 @@ const Login = () => {
         });
         break;
       case 'INVALID_CREDENTIALS':
-        toast.show(
-          data.attemptsLeft != null
-            ? `Invalid credentials. ${data.attemptsLeft} attempt(s) left.`
-            : 'Invalid email or password.',
-          { type: 'danger', placement: 'top', duration: 3000 },
-        );
+        toast.show('Invalid email or password.', {
+          type: 'danger',
+          placement: 'top',
+          duration: 3000,
+        });
         break;
       case 'ACCOUNT_INACTIVE':
         Alert.alert(
@@ -270,42 +264,9 @@ const Login = () => {
           [{ text: 'OK' }],
         );
         break;
-      case 'ACCOUNT_LOCKED':
-        Alert.alert(
-          'Account Locked',
-          `Account temporarily locked${
-            data.retryAfterMinutes
-              ? ` for ${data.retryAfterMinutes} minute(s)`
-              : ' for 30 minutes'
-          }. Please try again later.`,
-          [{ text: 'OK' }],
-        );
-        break;
-      case 'MAX_DEVICES_REACHED':
-        Alert.alert(
-          'Maximum Devices Reached',
-          'You have reached the maximum number of devices (3). Please remove a device from your account settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Manage Devices',
-              onPress: () =>
-                toast.show('Device management coming soon', {
-                  type: 'normal',
-                  placement: 'top',
-                  duration: 2000,
-                }),
-            },
-          ],
-        );
-        break;
-      case 'DEVICE_INFO_REQUIRED':
-        toast.show('Unable to verify device. Please try again.', {
-          type: 'danger',
-          placement: 'top',
-          duration: 3000,
-        });
-        break;
+      // ACCOUNT_LOCKED handling removed - unlimited login attempts
+      // MAX_DEVICES_REACHED handling removed - unlimited devices allowed
+      // DEVICE_INFO_REQUIRED case removed - device info no longer collected
       default:
         toast.show(data.message || 'Login failed. Please try again.', {
           type: 'danger',

@@ -1,32 +1,61 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Icon from 'react-native-vector-icons/Ionicons'; 
+import Icon from 'react-native-vector-icons/Ionicons';
 
-import Attendence from './../screen/home/Attendence';
+import Attendance from '../screen/attendance/Attendance';
 import Profile from '../screen/profile/Profile';
 
 const Tab = createBottomTabNavigator();
+const { width } = Dimensions.get('window');
 
 const getIcon = (name: string) => {
   switch (name) {
-    case 'Attendence':
-      return 'location-sharp';
+    case 'Home':
+      return 'home-sharp';
     case 'Profile':
       return 'person-sharp';
-
     default:
       return 'help';
-    case 'Profile':
-      return 'person-sharp';
   }
 };
 
-const CustomTabBar = ({ state, navigation }) => {
+const CustomTabBar = ({ state, navigation }: any) => {
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const numTabs = state.routes.length;
+  
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: state.index,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 50,
+    }).start();
+  }, [state.index]);
+
+  const tabWidth = (width * 0.75 - 40) / numTabs; // Adjust based on container width
+  
+  const translateX = slideAnim.interpolate({
+    inputRange: [0, numTabs - 1],
+    outputRange: [10, tabWidth * (numTabs - 1) + 10],
+  });
+
   return (
-    <View style={styles.wrapper}>
+    <View style={styles.container}>
       <View style={styles.tabBar}>
-        {state.routes.map((route, index) => {
+        {/* Sliding Background */}
+        <Animated.View
+          style={[
+            styles.slidingBackground,
+            {
+              width: tabWidth - 10,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+
+        {/* Tab Items */}
+        {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
 
           return (
@@ -34,17 +63,17 @@ const CustomTabBar = ({ state, navigation }) => {
               key={route.key}
               activeOpacity={0.8}
               onPress={() => navigation.navigate(route.name)}
-              style={[styles.tabItem, isFocused && styles.activeTab]}
+              style={styles.tabItem}
             >
-              <Icon
-                name={getIcon(route.name)}
-                size={24}
-                color={isFocused ? '#0A3D91' : '#FFFFFF'}
-              />
+              <View style={styles.iconContainer}>
+                <Icon
+                  name={getIcon(route.name)}
+                  size={26}
+                  color={isFocused ? '#1F2937' : '#6B7280'}
+                />
+              </View>
               {isFocused && (
-                <Text style={[styles.tabText, styles.activeText]}>
-                  {route.name}
-                </Text>
+                <Text style={styles.tabText}>{route.name}</Text>
               )}
             </TouchableOpacity>
           );
@@ -62,8 +91,8 @@ const TabNavigator = () => {
         headerShown: false,
       }}
     >
-      <Tab.Screen name="Attendence" component={Attendence} />
-      <Tab.Screen options={{}} name="Profile" component={Profile} />
+      <Tab.Screen name="Home" component={Attendance} />
+      <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>
   );
 };
@@ -71,52 +100,59 @@ const TabNavigator = () => {
 export default TabNavigator;
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
     position: 'absolute',
-    bottom: 30,
-    width: '60%',
+    bottom: 25,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: '20%',
+    paddingHorizontal: 20,
   },
 
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#a88a8aff',
-    borderRadius: 40,
-    padding: 6,
-
-    height: 60,
-    alignItems: 'center',
-
+    backgroundColor: '#4B5563',
+    borderRadius: 35,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 12,
+    width: '75%',
+    position: 'relative',
+  },
+
+  slidingBackground: {
+    position: 'absolute',
+    height: 50,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 25,
+    top: 10,
+    // left: 5,
   },
 
   tabItem: {
     flex: 1,
-    height: 48,
-    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    paddingVertical: 6,
+    zIndex: 10,
+    gap: 8,
+  },
+
+  iconContainer: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   tabText: {
-    color: '#FFFFFF',
-    fontWeight: '500',
-    fontSize: 14,
-    marginRight: 8,
-  },
-
-  activeText: {
-    color: '#0A3D91',
-    fontWeight: '700',
-  },
-  activeTab: {
-    backgroundColor: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 });
