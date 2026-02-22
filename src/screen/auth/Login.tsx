@@ -17,14 +17,9 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import Icon1 from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from 'react-native-toast-notifications';
-
-<<<<<<< HEAD
-// Device info collection removed per user request
-=======
-import { getDeviceInfo } from '../../services/device/deviceService';
->>>>>>> f6a47b5dac2c78f36b61f82170660ea4c01127ee
 import { getCurrentLocation } from '../../services/location/locationService';
 import { API_CONFIG } from '../../services/api/apiConfig';
+
 
 const Login = () => {
   const navigation = useNavigation();
