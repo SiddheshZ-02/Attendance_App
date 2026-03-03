@@ -13,8 +13,7 @@ import {
   PermissionsAndroid,
   AppState,
 } from 'react-native';
-import React, { useRef, useState, useEffect } from 'react';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Geolocation from '@react-native-community/geolocation';
@@ -23,11 +22,14 @@ import {
   request,
   PERMISSIONS,
   RESULTS,
-  openSettings,
 } from 'react-native-permissions';
 import { useToast } from 'react-native-toast-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../services/api/apiConfig';
+import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
+import {
+  fetchTodayAttendance,
+  logAttendance,
+  setWorkMode,
+} from '../../features/attendance/attendanceSlice';
 
 const { height } = Dimensions.get('window');
 
@@ -39,7 +41,6 @@ const workModeOptions = [
 const Attendence = () => {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const [checkedIn, setCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [attendanceStats, setAttendanceStats] = useState({
     firstCheckIn: '--:--',
@@ -48,14 +49,12 @@ const Attendence = () => {
     checkInDate: null as Date | null,
     checkOutDate: null as Date | null,
   });
-  const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [userName, setUserName] = useState('User');
-  const [authToken, setAuthToken] = useState<string | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [isFetchingToday, setIsFetchingToday] = useState(true); // loading today's data
+  const [cooldownLeft, setCooldownLeft] = useState(0); // seconds to wait after check-in
 
   const isProcessing = useRef(false);
   const lastKnownLocation = useRef<{
@@ -64,31 +63,13 @@ const Attendence = () => {
     timestamp: number;
   } | null>(null);
   const gpsWarmupWatchId = useRef<number | null>(null);
-
-  const navigation = useNavigation();
   const toast = useToast();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(state => state.auth);
+  const attendance = useAppSelector(state => state.attendance);
 
-  // ═══════════════════════════════════════════════════════════
-  // LOAD USER DATA FROM STORAGE
-  // ═══════════════════════════════════════════════════════════
-  const loadUserData = async () => {
-    try {
-      const [name, token] = await AsyncStorage.multiGet([
-        'userName',
-        'authToken',
-      ]);
-      setUserName(name[1] || 'User');
-      setAuthToken(token[1]);
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
-
-  useFocusEffect(
-    React.useCallback(() => {
-      loadUserData();
-    }, []),
-  );
+  const checkedIn = attendance.checkedIn;
+  const selectedMode = attendance.workMode;
 
 
 
@@ -100,72 +81,114 @@ const Attendence = () => {
   // LOAD TODAY'S ATTENDANCE ON MOUNT (GET /api/attendance/today)
   // Restores checkedIn state + stats after app restart
   // ═══════════════════════════════════════════════════════════
-  const loadTodayAttendance = async () => {
+  const loadTodayAttendance = useCallback(async () => {
     try {
       setIsFetchingToday(true);
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
+      const result = await dispatch(fetchTodayAttendance()).unwrap();
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}/api/attendance/today`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      if (result && result.attendance) {
+        const checkInDate = result.attendance.checkInTime
+          ? new Date(result.attendance.checkInTime)
+          : null;
+        const checkOutDate = result.attendance.checkOutTime
+          ? new Date(result.attendance.checkOutTime)
+          : null;
 
-      const data = await response.json();
-      console.log('📅 Today attendance:', data);
-
-      if (data.success) {
-        // Restore checkedIn state
-        if (data.hasCheckedIn && !data.hasCheckedOut) {
-          setCheckedIn(true);
-        } else if (data.hasCheckedOut) {
-          setCheckedIn(false); // already fully done for today
-        }
-
-        // Restore selected work mode if checked in
-        if (data.workMode) {
-          setSelectedMode(data.workMode);
-        }
-
-        // ✅ Use raw ISO timestamps and format on device (IST timezone)
-        // Never trust pre-formatted time strings from server (UTC)
-        if (data.attendance) {
-          const checkInDate = data.attendance.checkInTime
-            ? new Date(data.attendance.checkInTime)
-            : null;
-          const checkOutDate = data.attendance.checkOutTime
-            ? new Date(data.attendance.checkOutTime)
-            : null;
-
-          setAttendanceStats(prev => ({
-            ...prev,
-            firstCheckIn: checkInDate ? formatTime(checkInDate) : '--:--',
-            lastCheckOut: checkOutDate ? formatTime(checkOutDate) : '--:--',
-            totalHours:
-              checkInDate && checkOutDate
-                ? calculateTotalHours(checkInDate, checkOutDate)
-                : '--:--',
-            checkInDate,
-            checkOutDate,
-          }));
-        }
+        setAttendanceStats(prev => ({
+          ...prev,
+          firstCheckIn: checkInDate ? formatTime(checkInDate) : '--:--',
+          lastCheckOut: checkOutDate ? formatTime(checkOutDate) : '--:--',
+          totalHours:
+            checkInDate && checkOutDate
+              ? calculateTotalHours(checkInDate, checkOutDate)
+              : '--:--',
+          checkInDate,
+          checkOutDate,
+        }));
       }
     } catch (error) {
       console.error('❌ Load today attendance error:', error);
     } finally {
       setIsFetchingToday(false);
     }
-  };
+  }, [dispatch]);
 
   useEffect(() => {
     loadTodayAttendance();
+  }, [loadTodayAttendance]);
+
+  // ═══════════════════════════════════════════════════════════
+  // GPS HELPERS
+  // ═══════════════════════════════════════════════════════════
+  const warmupGPS = useCallback(() => {
+    gpsWarmupWatchId.current = Geolocation.watchPosition(
+      position => {
+        lastKnownLocation.current = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          timestamp: Date.now(),
+        };
+      },
+      error => console.log('⚠️ GPS warmup:', error.message),
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000,
+        distanceFilter: 50,
+      },
+    );
   }, []);
+
+  const hasLocationPermission = async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      return await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+    }
+    const result = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    return result === RESULTS.GRANTED;
+  };
+
+  const ensureLocationPermission = async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+      if (granted) return true;
+      const req = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+      return req === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    const status = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    if (status === RESULTS.GRANTED) return true;
+    const reqStatus = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    return reqStatus === RESULTS.GRANTED;
+  };
+
+  const isGPSEnabled = (): Promise<boolean> =>
+    new Promise(resolve => {
+      Geolocation.getCurrentPosition(
+        () => resolve(true),
+        error => resolve(error.code !== 2),
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
+      );
+    });
+
+  const checkGPSStatus = useCallback(async () => {
+    try {
+      const hasPermission = await hasLocationPermission();
+      const gpsEnabled = await isGPSEnabled();
+      if (!hasPermission || !gpsEnabled) {
+        setShowLocationModal(true);
+      } else {
+        setShowLocationModal(false);
+        warmupGPS();
+      }
+    } catch (error) {
+      console.error('GPS check error:', error);
+    }
+  }, [warmupGPS]);
 
   // ═══════════════════════════════════════════════════════════
   // GPS WARMUP ON MOUNT
@@ -178,7 +201,7 @@ const Attendence = () => {
         Geolocation.clearWatch(gpsWarmupWatchId.current);
       }
     };
-  }, []);
+  }, [checkGPSStatus, warmupGPS]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -187,12 +210,19 @@ const Attendence = () => {
       }
     });
     return () => subscription.remove();
-  }, []);
+  }, [checkGPSStatus]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Cooldown countdown after successful check-in to avoid immediate checkout tap
+  useEffect(() => {
+    if (cooldownLeft <= 0) return;
+    const t = setTimeout(() => setCooldownLeft(prev => (prev > 0 ? prev - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [cooldownLeft]);
 
   // ═══════════════════════════════════════════════════════════
   // LIVE TOTAL HOURS UPDATE (while checked in)
@@ -212,65 +242,13 @@ const Attendence = () => {
   }, [checkedIn, attendanceStats.checkInDate]);
 
   // ═══════════════════════════════════════════════════════════
-  // GPS HELPERS
+  // LOCATION VALIDATION
   // ═══════════════════════════════════════════════════════════
-  const warmupGPS = () => {
-    gpsWarmupWatchId.current = Geolocation.watchPosition(
-      position => {
-        lastKnownLocation.current = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          timestamp: Date.now(),
-        };
-      },
-      error => console.log('⚠️ GPS warmup:', error.message),
-      {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 60000,
-        distanceFilter: 50,
-      },
-    );
-  };
-
-  const hasLocationPermission = async (): Promise<boolean> => {
-    if (Platform.OS === 'android') {
-      return await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-    }
-    const result = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-    return result === RESULTS.GRANTED;
-  };
-
-  const isGPSEnabled = (): Promise<boolean> =>
-    new Promise(resolve => {
-      Geolocation.getCurrentPosition(
-        () => resolve(true),
-        error => resolve(error.code !== 2),
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
-      );
-    });
-
-  const checkGPSStatus = async () => {
-    try {
-      const hasPermission = await hasLocationPermission();
-      const gpsEnabled = await isGPSEnabled();
-      if (!hasPermission || !gpsEnabled) {
-        setShowLocationModal(true);
-      } else {
-        setShowLocationModal(false);
-        warmupGPS();
-      }
-    } catch (error) {
-      console.error('GPS check error:', error);
-    }
-  };
-
   const validateLocationRequirements = async (): Promise<void> => {
-    if (!(await hasLocationPermission()))
-      throw new Error('PERMISSION_REQUIRED');
-    if (!(await isGPSEnabled())) throw new Error('GPS_OFF');
+    const permitted = await ensureLocationPermission();
+    if (!permitted) throw new Error('PERMISSION_REQUIRED');
+    const gpsOk = await isGPSEnabled();
+    if (!gpsOk) throw new Error('GPS_OFF');
   };
 
   const handleLocationError = (error: Error) => {
@@ -288,9 +266,9 @@ const Attendence = () => {
         duration: 4000,
         onPress: () => {
           if (Platform.OS === 'android') {
-            Linking.sendIntent(
-              'android.settings.LOCATION_SOURCE_SETTINGS',
-            ).catch(() => Linking.openSettings());
+            (Linking as any)
+              .sendIntent('android.settings.LOCATION_SOURCE_SETTINGS')
+              .catch(() => Linking.openSettings());
           } else {
             Linking.openSettings();
           }
@@ -312,7 +290,8 @@ const Attendence = () => {
 
   const handleEnableLocation = () => {
     if (Platform.OS === 'android') {
-      Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS')
+      (Linking as any)
+        .sendIntent('android.settings.LOCATION_SOURCE_SETTINGS')
         .then(() => setShowLocationModal(false))
         .catch(() => {
           Linking.openSettings();
@@ -391,110 +370,8 @@ const Attendence = () => {
   // ═══════════════════════════════════════════════════════════
   // LOG ATTENDANCE — calls /api/attendance/checkin or /checkout
   // ═══════════════════════════════════════════════════════════
-  const logAttendance = async (
-    type: 'check-in' | 'check-out',
-    location: { lat: number; lng: number },
-  ) => {
-    try {
-      setLoadingMessage('Saving attendance...');
-
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) throw new Error('Not authenticated. Please login again.');
-
-      // ── Determine endpoint ────────────────────────────────────
-      // ✅ Fixed: correct endpoint names (no hyphen) + switches per type
-      const endpoint =
-        type === 'check-in'
-          ? `${API_CONFIG.BASE_URL}/api/attendance/checkin`
-          : `${API_CONFIG.BASE_URL}/api/attendance/checkout`;
-
-      // ✅ Fixed: backend expects { latitude, longitude, workMode }
-      const body: Record<string, any> = {
-        latitude: location.lat,
-        longitude: location.lng,
-      };
-
-      // workMode only needed on check-in
-      if (type === 'check-in') {
-        body.workMode = selectedMode; // 'Office' or 'WFH'
-      }
-
-      console.log(`📤 ${type} request to ${endpoint}:`, body);
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      console.log(`📥 ${type} response:`, data);
-
-      if (!data.success) {
-        // ── Backend error codes ──────────────────────────────────
-        switch (data.code) {
-          case 'OUT_OF_OFFICE_RADIUS':
-            throw new Error(
-              `You are ${data.distance}m from the office. Must be within ${data.allowedRadius}m.`,
-            );
-          case 'OUT_OF_WFH_RADIUS':
-            throw new Error(
-              `You are ${data.distance}m from your check-in location. Must be within ${data.allowedRadius}m.`,
-            );
-          case 'ALREADY_CHECKED_IN':
-            throw new Error('You are already checked in today.');
-          case 'ALREADY_CHECKED_OUT':
-            throw new Error('You have already checked out today.');
-          case 'NOT_CHECKED_IN':
-            throw new Error('You have not checked in today.');
-          default:
-            throw new Error(data.message || `Failed to ${type}`);
-        }
-      }
-
-      // ✅ Use raw ISO timestamps from attendance object and format
-      // on device — avoids server UTC vs device IST timezone mismatch
-      if (data.attendance) {
-        const checkInDate = data.attendance.checkInTime
-          ? new Date(data.attendance.checkInTime)
-          : null;
-        const checkOutDate = data.attendance.checkOutTime
-          ? new Date(data.attendance.checkOutTime)
-          : null;
-
-        setAttendanceStats(prev => ({
-          ...prev,
-          // formatTime() uses device local timezone — correct IST time ✅
-          firstCheckIn: checkInDate
-            ? formatTime(checkInDate)
-            : prev.firstCheckIn,
-          lastCheckOut: checkOutDate
-            ? formatTime(checkOutDate)
-            : prev.lastCheckOut,
-          totalHours:
-            checkInDate && checkOutDate
-              ? calculateTotalHours(checkInDate, checkOutDate)
-              : prev.totalHours,
-          checkInDate,
-          checkOutDate,
-        }));
-      }
-
-      return true;
-    } catch (error) {
-      console.error('❌ Log attendance error:', error);
-      throw error;
-    }
-  };
-
-  // ═══════════════════════════════════════════════════════════
-  // HANDLE CHECK IN / CHECK OUT PRESS
-  // ═══════════════════════════════════════════════════════════
   const handlePress = async () => {
-    if (isProcessing.current || isLoading) return;
+    if (isProcessing.current || isLoading || cooldownLeft > 0) return;
 
     if (!selectedMode) {
       toast.show('Please select your work mode first', {
@@ -513,9 +390,43 @@ const Attendence = () => {
       await validateLocationRequirements();
       const location = await fetchLocationOptimized();
       const type = checkedIn ? 'check-out' : 'check-in';
-      await logAttendance(type, location);
+      const result = await dispatch(
+        logAttendance({
+          type,
+          location,
+          workMode: selectedMode || null,
+        }),
+      ).unwrap();
 
-      setCheckedIn(!checkedIn);
+      if (result.attendance) {
+        const checkInDate = result.attendance.checkInTime
+          ? new Date(result.attendance.checkInTime)
+          : null;
+        const checkOutDate = result.attendance.checkOutTime
+          ? new Date(result.attendance.checkOutTime)
+          : null;
+
+        setAttendanceStats(prev => ({
+          ...prev,
+          firstCheckIn: checkInDate
+            ? formatTime(checkInDate)
+            : prev.firstCheckIn,
+          lastCheckOut: checkOutDate
+            ? formatTime(checkOutDate)
+            : prev.lastCheckOut,
+          totalHours:
+            checkInDate && checkOutDate
+              ? calculateTotalHours(checkInDate, checkOutDate)
+              : prev.totalHours,
+          checkInDate,
+          checkOutDate,
+        }));
+      }
+
+      // Start a 10s cooldown ONLY after a successful check-in
+      if (!checkedIn) {
+        setCooldownLeft(10);
+      }
 
       toast.show(
         checkedIn
@@ -608,7 +519,7 @@ const Attendence = () => {
   // ANIMATION
   // ═══════════════════════════════════════════════════════════
   const pressIn = () => {
-    if (!isLoading)
+    if (!isLoading && cooldownLeft === 0)
       Animated.spring(scale, { toValue: 0.9, useNativeDriver: true }).start();
   };
   const pressOut = () => {
@@ -621,21 +532,15 @@ const Attendence = () => {
 
   const activeColor = checkedIn ? '#DC2626' : '#16A34A';
   const label = checkedIn ? 'Check Out' : 'Check In';
+  const displayLabel = cooldownLeft > 0 ? `Wait ${cooldownLeft}s` : label;
   const selectedModeData = workModeOptions.find(m => m.value === selectedMode);
 
   // Show loading skeleton while fetching today's data
   if (isFetchingToday) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
+      <View style={[styles.container, styles.loadingCenter]}>
         <ActivityIndicator size="large" color="#16A34A" />
-        <Text style={{ marginTop: 12, color: 'grey' }}>
-          Loading attendance...
-        </Text>
+        <Text style={styles.loadingAttendanceText}>Loading attendance...</Text>
       </View>
     );
   }
@@ -645,7 +550,9 @@ const Attendence = () => {
       {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Hey {userName}!</Text>
+          <Text style={styles.title}>
+            Hey {auth.user?.name || 'User'}!
+          </Text>
           <Text style={styles.subtitle}>
             {getGreetingMessage()}
           </Text>
@@ -677,7 +584,7 @@ const Attendence = () => {
                       styles.dropdownItemSelected,
                   ]}
                   onPress={() => {
-                    setSelectedMode(option.value);
+                    dispatch(setWorkMode(option.value));
                     setShowDropdown(false);
                   }}
                 >
@@ -723,15 +630,22 @@ const Attendence = () => {
               onPress={handlePress}
               style={[
                 styles.middleRing,
-                isLoading && styles.middleRingDisabled,
+                (isLoading || cooldownLeft > 0) && styles.middleRingDisabled,
               ]}
-              disabled={isLoading}
+              disabled={isLoading || cooldownLeft > 0}
             >
               {isLoading ? (
                 <>
                   <ActivityIndicator size="large" color={activeColor} />
                   <Text style={[styles.loadingText, { color: activeColor }]}>
                     {loadingMessage}
+                  </Text>
+                </>
+              ) : cooldownLeft > 0 ? (
+                <>
+                  <MaterialIcons name="timer" size={40} color={activeColor} />
+                  <Text style={[styles.text, { color: activeColor }]}>
+                    {displayLabel}
                   </Text>
                 </>
               ) : (
@@ -742,7 +656,7 @@ const Attendence = () => {
                     color={activeColor}
                   />
                   <Text style={[styles.text, { color: activeColor }]}>
-                    {label}
+                    {displayLabel}
                   </Text>
                 </>
               )}
@@ -933,6 +847,14 @@ const styles = StyleSheet.create({
   middleRingDisabled: { opacity: 0.8 },
   text: { fontSize: 16, fontWeight: '800', marginTop: 10 },
   loadingText: { fontSize: 12, fontWeight: '600', marginTop: 8 },
+  loadingCenter: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingAttendanceText: {
+    marginTop: 12,
+    color: 'grey',
+  },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',

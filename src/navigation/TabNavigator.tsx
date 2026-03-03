@@ -31,7 +31,7 @@ const CustomTabBar = ({ state, navigation }: any) => {
       friction: 8,
       tension: 50,
     }).start();
-  }, [state.index]);
+  }, [state.index, slideAnim]);
 
   const tabWidth = (width * 0.75 - 40) / numTabs; // Adjust based on container width
   
@@ -83,10 +83,12 @@ const CustomTabBar = ({ state, navigation }: any) => {
   );
 };
 
+const renderTabBar = (props: any) => <CustomTabBar {...props} />;
+
 const TabNavigator = () => {
   return (
     <Tab.Navigator
-      tabBar={props => <CustomTabBar {...props} />}
+      tabBar={renderTabBar}
       screenOptions={{
         headerShown: false,
       }}

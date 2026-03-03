@@ -8,8 +8,8 @@ export const API_ENDPOINTS = {
     LOGIN: '/api/auth/login',
     REGISTER: '/api/auth/register',
     PROFILE: '/api/auth/profile',
-    LOGOUT: '/api/auth/logout'
-   
+    LOGOUT: '/api/auth/logout',
+    REFRESH: '/api/auth/refresh'
   },
   ATTENDANCE: {
     CHECK_IN: '/api/attendance/checkin',

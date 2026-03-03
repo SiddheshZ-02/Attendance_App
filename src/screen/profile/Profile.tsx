@@ -13,71 +13,42 @@ import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../services/api/apiConfig';
+import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
+import { checkSession, logout } from '../../features/auth/authSlice';
 
 const Profile = () => {
   const navigation = useNavigation();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(state => state.auth);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [department, setDepartment] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [employeeId, setEmployeeId] = useState('');
-  const [role, setRole] = useState('');
-
-  // ═══════════════════════════════════════════════════════════
-  // LOAD PROFILE — GET /api/auth/profile
-  // ═══════════════════════════════════════════════════════════
-  const loadProfile = async () => {
-    try {
-      setIsLoading(true);
-      const token = await AsyncStorage.getItem('authToken');
-
-      if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
-        return;
-      }
-
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/auth/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      console.log('📥 Profile response:', data);
-
-      if (data.success && data.data) {
-        const user = data.data;
-        setName(user.name || '');
-        setEmail(user.email || '');
-        setDepartment(user.department || '');
-        setPhoneNumber(user.phoneNumber || '');
-        setEmployeeId(user.employeeId || '');
-        setRole(user.role || '');
-      } else if (
-        data.code === 'TOKEN_EXPIRED' ||
-        data.code === 'INVALID_TOKEN'
-      ) {
-        await clearAndNavigateToLogin();
-      }
-    } catch (error) {
-      console.error('❌ Load profile error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const user = auth.user;
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (!auth.token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+      return;
+    }
+
+    if (!user) {
+      setIsLoading(true);
+      dispatch(checkSession())
+        .unwrap()
+        .then(result => {
+          if (!result) {
+            navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
+    }
+  }, [auth.token, user, dispatch, navigation]);
 
   // ═══════════════════════════════════════════════════════════
   // LOGOUT — POST /api/auth/logout + clear AsyncStorage
@@ -85,44 +56,14 @@ const Profile = () => {
   const confirmLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const token = await AsyncStorage.getItem('authToken');
-
-      if (token) {
-        try {
-          await fetch(`${API_CONFIG.BASE_URL}/api/auth/logout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            // deviceId parameter removed - device info no longer collected
-            body: JSON.stringify({}),
-          });
-        } catch (apiError) {
-          console.warn('⚠️ Logout API failed, clearing local anyway');
-        }
-      }
-      await clearAndNavigateToLogin();
-    } catch (error) {
-      await clearAndNavigateToLogin();
+      await dispatch(logout()).unwrap();
+      navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+    } catch {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
     } finally {
       setIsLoggingOut(false);
       setShowLogoutModal(false);
     }
-  };
-
-  const clearAndNavigateToLogin = async () => {
-    await AsyncStorage.multiRemove([
-      'authToken',
-      'userId',
-      'userName',
-      'userEmail',
-      'userRole',
-      'employeeId',
-      'department',
-      // 'deviceFingerprint' - removed per user request
-    ]);
-    navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -130,14 +71,9 @@ const Profile = () => {
   // ═══════════════════════════════════════════════════════════
   if (isLoading) {
     return (
-      <View
-        style={[
-          styles.screen,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
+      <View style={[styles.screen, styles.centeredContent]}>
         <ActivityIndicator size="large" color="#a88a8aff" />
-        <Text style={{ marginTop: 12, color: 'grey' }}>Loading profile...</Text>
+        <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
   }
@@ -166,14 +102,12 @@ const Profile = () => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* AVATAR + NAME + ROLE */}
+        {/* AVATAR + NAME + POSITION */}
         <View style={styles.profileSection}>
           <Icon name="user-circle" size={150} color="#a88a8aff" />
-          <Text style={styles.name}>{name || 'Employee'}</Text>
-          {role ? (
-            <Text style={styles.roleTag}>
-              {role.charAt(0).toUpperCase() + role.slice(1)}
-            </Text>
+          <Text style={styles.name}>{user?.name || 'Employee'}</Text>
+          {user?.position ? (
+            <Text style={styles.roleTag}>{user.position}</Text>
           ) : null}
         </View>
 
@@ -187,7 +121,7 @@ const Profile = () => {
             <Text style={styles.label}>Email</Text>
             <TextInput
               style={[styles.input, styles.readOnly]}
-              value={email}
+              value={user?.email || ''}
               editable={false}
               keyboardType="email-address"
             />
@@ -197,26 +131,24 @@ const Profile = () => {
             <Text style={styles.label}>Department</Text>
             <TextInput
               style={[styles.input, styles.readOnly]}
-              value={department || 'Not assigned'}
+              value={user?.department || 'Not assigned'}
               editable={false}
             />
           </View>
-             {role ? (
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Role</Text>
-              <TextInput
-                style={[styles.input, styles.readOnly]}
-                value={role}
-                editable={false}
-              />
-            </View>
-          ) : null}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Position</Text>
+            <TextInput
+              style={[styles.input, styles.readOnly]}
+              value={user?.position || 'Not assigned'}
+              editable={false}
+            />
+          </View>
 
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Phone Number</Text>
             <TextInput
               style={[styles.input, styles.readOnly]}
-              value={phoneNumber || 'Not provided'}
+              value={user?.phone || 'Not provided'}
               editable={false}
               keyboardType="phone-pad"
             />
@@ -331,6 +263,8 @@ export default Profile;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
+  centeredContent: { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, color: 'grey' },
   header: {
     height: 60,
     flexDirection: 'row',

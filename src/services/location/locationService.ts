@@ -7,7 +7,7 @@ import Geolocation from '@react-native-community/geolocation';
  * Uses your existing fetchLocationOptimized logic
  */
 export const getCurrentLocation = () => {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     Geolocation.getCurrentPosition(
       position => {
         resolve({

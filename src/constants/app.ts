@@ -1,13 +1,13 @@
 // App Constants
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'authToken',
+  REFRESH_TOKEN: 'refreshToken',
   USER_ID: 'userId',
   USER_NAME: 'userName',
   USER_EMAIL: 'userEmail',
   USER_ROLE: 'userRole',
   EMPLOYEE_ID: 'employeeId',
   DEPARTMENT: 'department'
- 
 };
 
 export const PERMISSIONS = {

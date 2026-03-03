@@ -15,88 +15,36 @@ import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Icon1 from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from 'react-native-toast-notifications';
 import { getCurrentLocation } from '../../services/location/locationService';
-import { API_CONFIG } from '../../services/api/apiConfig';
+import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
+import { checkSession, login } from '../../features/auth/authSlice';
 
 
 const Login = () => {
   const navigation = useNavigation();
   const toast = useToast();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(state => state.auth);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // checking stored token
   const [loadingMessage, setLoadingMessage] = useState('Logging in...');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── Check AsyncStorage on mount ────────────────────────────────
-  // If a valid token already exists → skip login → go to Tab
+  const isLoading = auth.status === 'loading';
+  const isCheckingAuth = auth.checkingSession;
+
   useEffect(() => {
-    checkExistingSession();
-  }, []);
+    dispatch(checkSession());
+  }, [dispatch]);
 
-  const checkExistingSession = async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-
-      if (!token) {
-        // No token — show login form
-        setIsCheckingAuth(false);
-        return;
-      }
-
-      // Verify token is still valid with backend
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/auth/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Token valid — update stored user data with fresh data
-        const user = data.data;
-        await AsyncStorage.multiSet([
-          ['userName', user.name || ''],
-          ['userEmail', user.email || ''],
-          ['userRole', user.role || ''],
-          ['employeeId', user.employeeId || ''],
-          ['department', user.department || ''],
-        ]);
-
-        console.log('✅ Session valid — auto navigating');
-        navigation.reset({ index: 0, routes: [{ name: 'Tab' as never }] });
-      } else {
-        // Token expired or invalid — clear storage, show login
-        console.log('⚠️ Session expired — clearing storage');
-        await clearStorage();
-        setIsCheckingAuth(false);
-      }
-    } catch (error) {
-      // Network error or server down — still show login form
-      console.warn('⚠️ Session check failed (network):', error);
-      setIsCheckingAuth(false);
+  useEffect(() => {
+    if (auth.token && auth.user) {
+      navigation.reset({ index: 0, routes: [{ name: 'Tab' as never }] });
     }
-  };
-
-  const clearStorage = async () => {
-    await AsyncStorage.multiRemove([
-      'authToken',
-      'userId',
-      'userName',
-      'userEmail',
-      'userRole',
-      'employeeId',
-      'department',
-      // 'deviceFingerprint' - removed per user request
-    ]);
-  };
+  }, [auth.token, auth.user, navigation]);
 
   // ── Validation ─────────────────────────────────────────────────
   const validateInputs = () => {
@@ -138,103 +86,73 @@ const Login = () => {
 
   // ── Main Login Handler ─────────────────────────────────────────
   const handleLogin = async () => {
+    if (isSubmitting || isLoading) return;
     Keyboard.dismiss();
     if (!validateInputs()) return;
 
+    setIsSubmitting(true);
+    setLoadingMessage('Getting location...');
+
     try {
-      setIsLoading(true);
-
-      // STEP 1 — Skip device info collection (removed per user request)
-
-      // STEP 2 — Location (optional)
-      // setLoadingMessage('Getting location...');
       const location = await getCurrentLocation();
+      setLoadingMessage('Logging in...');
       console.log(
         location ? '✅ Location collected' : '⚠️ Location not available',
       );
 
-      // STEP 3 — Call /api/auth/login
-      // setLoadingMessage('Authenticating...');
-      const loginData = {
-        email: email.trim().toLowerCase(),
-        password,
-        location: location
-          ? {
-              latitude: (location as any).latitude,
-              longitude: (location as any).longitude,
-              accuracy: (location as any).accuracy,
-            }
-          : null,
-      };
+      const result = await dispatch(
+        login({
+          email,
+          password,
+          location: location
+            ? {
+                latitude: (location as any).latitude,
+                longitude: (location as any).longitude,
+                accuracy: (location as any).accuracy,
+              }
+            : null,
+        }),
+      ).unwrap(); // result contains token and refreshToken
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.AUTH.LOGIN}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(loginData),
-        },
-      );
+      setLoadingMessage('Login successful!');
 
-      const data = await response.json();
-      console.log('📥 Response:', { success: data.success, code: data.code });
-
-      // STEP 4 — Handle response
-      if (data.success) {
-        setLoadingMessage('Login successful!');
-
-        // Save all user data to AsyncStorage
-        await AsyncStorage.multiSet([
-          ['authToken', data.data.token],
-          ['userId', data.data._id],
-          ['userName', data.data.name],
-          ['userEmail', data.data.email],
-          ['userRole', data.data.role],
-          ['employeeId', data.data.employeeId || ''],
-          ['department', data.data.department || ''],
-          // deviceFingerprint removed per user request
-        ]);
-        console.log('✅ User data saved to storage');
-
-        // Show warnings if any
-        if (data.warnings?.newDevice) {
-          setTimeout(() => {
-            Alert.alert(
-              '🔒 New Device Detected',
-              "This device has been registered. If this wasn't you, contact support immediately.",
-              [{ text: 'OK' }],
-            );
-          }, 500);
-        }
-        if (data.warnings?.suspiciousLocation) {
-          setTimeout(() => {
-            Alert.alert(
-              '⚠️ Unusual Location',
-              data.warnings.message || 'Unusual login location detected.',
-              [{ text: 'OK' }],
-            );
-          }, 1000);
-        }
-
-        toast.show(`Welcome back, ${data.data.name}!`, {
-          type: 'success',
-          placement: 'top',
-          duration: 3000,
-        });
-
-        setTimeout(() => navigation.navigate('Tab' as never), 500);
-      } else {
-        handleLoginError(data);
+      if ((result as any).warnings?.newDevice) {
+        setTimeout(() => {
+          Alert.alert(
+            '🔒 New Device Detected',
+            "This device has been registered. If this wasn't you, contact support immediately.",
+            [{ text: 'OK' }],
+          );
+        }, 500);
       }
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      toast.show('Login failed. Please check your internet connection.', {
-        type: 'danger',
+      if ((result as any).warnings?.suspiciousLocation) {
+        setTimeout(() => {
+          Alert.alert(
+            '⚠️ Unusual Location',
+            result.warnings?.message || 'Unusual login location detected.',
+            [{ text: 'OK' }],
+          );
+        }, 1000);
+      }
+
+      toast.show(`Welcome back, ${result.user.name}!`, {
+        type: 'success',
         placement: 'top',
-        duration: 4000,
+        duration: 3000,
       });
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      if (error && (error.code || error.message)) {
+        handleLoginError(error);
+      } else {
+        toast.show('Login failed. Please check your internet connection.', {
+          type: 'danger',
+          placement: 'top',
+          duration: 4000,
+        });
+      }
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
       setLoadingMessage('Logging in...');
     }
   };
@@ -263,9 +181,7 @@ const Login = () => {
           [{ text: 'OK' }],
         );
         break;
-      // ACCOUNT_LOCKED handling removed - unlimited login attempts
-      // MAX_DEVICES_REACHED handling removed - unlimited devices allowed
-      // DEVICE_INFO_REQUIRED case removed - device info no longer collected
+
       default:
         toast.show(data.message || 'Login failed. Please try again.', {
           type: 'danger',
@@ -287,7 +203,7 @@ const Login = () => {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.fullFlex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
     >
@@ -338,14 +254,14 @@ const Login = () => {
             {/* Login Button */}
             <View style={styles.btnRow}>
               <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
+                style={[styles.button, (isLoading || isSubmitting) && styles.buttonDisabled]}
                 onPress={handleLogin}
-                disabled={isLoading}
+                disabled={isLoading || isSubmitting}
               >
-                {isLoading ? (
+                {isLoading || isSubmitting ? (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={[styles.btnText, { marginLeft: 10 }]}>
+                    <Text style={[styles.btnText, styles.btnTextSpacing]}>
                       {loadingMessage}
                     </Text>
                   </View>
@@ -369,6 +285,7 @@ const Login = () => {
 export default Login;
 
 const styles = StyleSheet.create({
+  fullFlex: { flex: 1 },
   splashContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -449,6 +366,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
+  },
+  btnTextSpacing: {
+    marginLeft: 10,
   },
   forgotBtn: {
     marginTop: 18,
