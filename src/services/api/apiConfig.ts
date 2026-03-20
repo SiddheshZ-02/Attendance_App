@@ -4,6 +4,8 @@ import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import { Attendance_API_TIMEOUT } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../constants/app';
+import { store } from '../../store';
+import { setSessionExpired } from '../../features/auth/authSlice';
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
@@ -66,8 +68,15 @@ export const apiCall = async (
         let refreshData: any = null;
         try { refreshData = await refreshResp.json(); } catch { refreshData = null; }
         if (refreshResp.ok && refreshData?.success && refreshData?.data?.token) {
-          await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, refreshData.data.token);
-          ({ resp, data } = await exec(refreshData.data.token));
+          const newToken = refreshData.data.token;
+          const newRefreshToken = refreshData.data.refreshToken;
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, newToken);
+          if (newRefreshToken) {
+            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+          }
+
+          ({ resp, data } = await exec(newToken));
           if (resp.status === 401) {
             throw { code: data?.code || 'SESSION_REVOKED', message: data?.message || 'Session invalid.' };
           }
@@ -81,7 +90,7 @@ export const apiCall = async (
     if (error?.name === 'AbortError') {
       throw { code: 'REQUEST_TIMEOUT', message: 'Request timed out. Please try again.' };
     }
-    if (['SESSION_REVOKED', 'TOKEN_REVOKED', 'INVALID_REFRESH'].includes(error?.code)) {
+    if (['SESSION_REVOKED', 'TOKEN_REVOKED', 'INVALID_REFRESH', 'REFRESH_TOKEN_EXPIRED'].includes(error?.code)) {
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.AUTH_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,
@@ -92,6 +101,7 @@ export const apiCall = async (
         STORAGE_KEYS.EMPLOYEE_ID,
         STORAGE_KEYS.DEPARTMENT,
       ]);
+      store.dispatch(setSessionExpired({ message: error?.message || 'Your session has expired.' }));
     }
     console.error('API call error:', error);
     throw error;
