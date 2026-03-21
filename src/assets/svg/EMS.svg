@@ -1,0 +1,55 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+  <defs>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <rect width="400" height="400" rx="76" fill="#080C18"/>
+
+  <ellipse cx="120" cy="140" rx="120" ry="100" fill="#0E4AFF" opacity="0.12" filter="url(#soft)"/>
+  <ellipse cx="300" cy="280" rx="100" ry="90" fill="#00C6F8" opacity="0.1" filter="url(#soft)"/>
+
+  <rect x="28" y="28" width="12" height="12" rx="3" fill="#00C6F8" opacity="0.7"/>
+  <rect x="360" y="28" width="12" height="12" rx="3" fill="#00C6F8" opacity="0.7"/>
+  <rect x="28" y="360" width="12" height="12" rx="3" fill="#00C6F8" opacity="0.3"/>
+  <rect x="360" y="360" width="12" height="12" rx="3" fill="#00C6F8" opacity="0.3"/>
+
+  <line x1="68" y1="34" x2="332" y2="34" stroke="#1A3A6C" stroke-width="1"/>
+
+  <!-- E -->
+  <rect x="52" y="148" width="16" height="116" rx="4" fill="#00C6F8"/>
+  <rect x="52" y="148" width="76" height="16" rx="4" fill="#00C6F8"/>
+  <rect x="52" y="198" width="56" height="14" rx="4" fill="#00C6F8"/>
+  <rect x="52" y="248" width="76" height="16" rx="4" fill="#00C6F8"/>
+
+  <!-- M -->
+  <rect x="154" y="148" width="15" height="116" rx="4" fill="white"/>
+  <rect x="231" y="148" width="15" height="116" rx="4" fill="white"/>
+  <polygon points="154,148 169,148 215,220 200,220" fill="white"/>
+  <polygon points="246,148 231,148 185,220 200,220" fill="white"/>
+
+  <!-- S -->
+  <rect x="268" y="148" width="80" height="14" rx="4" fill="#00C6F8"/>
+  <rect x="268" y="148" width="14" height="64" rx="4" fill="#00C6F8"/>
+  <rect x="268" y="200" width="80" height="14" rx="4" fill="#00C6F8"/>
+  <rect x="334" y="200" width="14" height="64" rx="4" fill="#00C6F8"/>
+  <rect x="268" y="250" width="80" height="14" rx="4" fill="#00C6F8"/>
+
+  <line x1="52" y1="290" x2="348" y2="290" stroke="#1A3A6C" stroke-width="1"/>
+
+  <!-- Tagline -->
+  <text x="200" y="320"
+    text-anchor="middle"
+    font-family="'Courier New', monospace"
+    font-size="12"
+    font-weight="400"
+    fill="#00C6F8"
+    opacity="0.75"
+    letter-spacing="4">EMPLOYEE · MANAGEMENT · SYSTEM</text>
+
+  <circle cx="164" cy="354" r="3" fill="#00C6F8" opacity="0.5"/>
+  <circle cx="200" cy="354" r="4" fill="#00C6F8" opacity="0.9"/>
+  <circle cx="236" cy="354" r="3" fill="#00C6F8" opacity="0.5"/>
+</svg>

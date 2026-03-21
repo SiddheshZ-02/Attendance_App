@@ -1,16 +1,28 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { View, Modal, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../hooks/reduxHooks';
 import { logout, setSessionExpired } from '../features/auth/authSlice';
 import { navigationRef } from '../navigation/navigationRef';
+import { useToast } from 'react-native-toast-notifications';
 
 const { width } = Dimensions.get('window');
 
 const SessionExpiredModal = () => {
   const dispatch = useAppDispatch();
+  const toast = useToast();
   const { sessionExpired, sessionExpiredMessage } = useAppSelector(
     s => s.auth,
   );
+
+  useEffect(() => {
+    if (sessionExpired) {
+      toast.show('Session Expire', {
+        type: 'warning',
+        placement: 'top',
+        duration: 3000,
+      });
+    }
+  }, [sessionExpired, toast]);
 
   const handleOk = useCallback(async () => {
     // Clear auth state and storage

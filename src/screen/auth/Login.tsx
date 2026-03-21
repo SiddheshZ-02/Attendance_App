@@ -19,6 +19,7 @@ import { useToast } from 'react-native-toast-notifications';
 import { getCurrentLocation } from '../../services/location/locationService';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
 import { checkSession, login } from '../../features/auth/authSlice';
+import SplashScreen from '../../components/SplashScreen';
 
 
 const Login = () => {
@@ -193,12 +194,7 @@ const Login = () => {
 
   // ── Splash screen while checking saved session ─────────────────
   if (isCheckingAuth) {
-    return (
-      <View style={styles.splashContainer}>
-        <ActivityIndicator size="large" color="#252525" />
-        <Text style={styles.splashText}>Checking session...</Text>
-      </View>
-    );
+    return <SplashScreen message="Checking session..." />;
   }
 
   return (
