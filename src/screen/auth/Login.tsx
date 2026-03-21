@@ -1,7 +1,5 @@
 import {
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -10,8 +8,13 @@ import {
   View,
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Icon1 from 'react-native-vector-icons/Ionicons';
@@ -19,8 +22,9 @@ import { useToast } from 'react-native-toast-notifications';
 import { getCurrentLocation } from '../../services/location/locationService';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
 import { checkSession, login } from '../../features/auth/authSlice';
-import SplashScreen from '../../components/SplashScreen';
+import EMSLogo from '../../assets/svg/EMS.svg';
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const Login = () => {
   const navigation = useNavigation();
@@ -33,19 +37,101 @@ const Login = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Logging in...');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  // Phase management
+  const [isSplashDone, setIsSplashDone] = useState(false);
+  const [isSessionCheckDone, setIsSessionCheckDone] = useState(false);
+  const hasNavigated = useRef(false);
+
+  // Animated values
+  const logoY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const logoScale = useRef(new Animated.Value(1.5)).current;
+  const formY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const formOpacity = useRef(new Animated.Value(0)).current;
 
   const isLoading = auth.status === 'loading';
-  const isCheckingAuth = auth.checkingSession;
 
   useEffect(() => {
-    dispatch(checkSession());
-  }, [dispatch]);
+    // 1. Initial Logo Animation: Bottom to Center
+    Animated.parallel([
+      Animated.timing(logoY, {
+        toValue: SCREEN_HEIGHT / 2 - 100,
+        duration: 1000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(logoScale, {
+        toValue: 1.2,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsSplashDone(true);
+    });
 
+    // 2. Perform Session Check
+    dispatch(checkSession()).finally(() => {
+      setIsSessionCheckDone(true);
+    });
+  }, []);
+
+  // 3. Coordinate transitions
   useEffect(() => {
-    if (auth.token && auth.user) {
-      navigation.reset({ index: 0, routes: [{ name: 'Tab' as never }] });
+    if (isSplashDone && isSessionCheckDone && !hasNavigated.current) {
+      if (auth.token && auth.user) {
+        // SESSION VALID
+        hasNavigated.current = true;
+        // Optional: Small delay to show logo at center
+        setTimeout(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Tab' as never }],
+          });
+        }, 200);
+      } else {
+        // SESSION INVALID -> Transition to Login Form
+        setShowForm(true);
+        Animated.parallel([
+          // Logo to top
+          Animated.timing(logoY, {
+            toValue: 60,
+            duration: 800,
+            easing: Easing.out(Easing.exp),
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoScale, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          // Form from bottom
+          Animated.timing(formY, {
+            toValue: 0,
+            duration: 1000,
+            easing: Easing.out(Easing.back(1)),
+            useNativeDriver: true,
+          }),
+          Animated.timing(formOpacity, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
     }
-  }, [auth.token, auth.user, navigation]);
+  }, [isSplashDone, isSessionCheckDone, auth.token, auth.user]);
+
+  // Handle successful manual login transition
+  useEffect(() => {
+    if (auth.token && auth.user && showForm && !hasNavigated.current) {
+      hasNavigated.current = true;
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Tab' as never }],
+      });
+    }
+  }, [auth.token, auth.user, showForm]);
 
   // ── Validation ─────────────────────────────────────────────────
   const validateInputs = () => {
@@ -193,85 +279,115 @@ const Login = () => {
   };
 
   // ── Splash screen while checking saved session ─────────────────
-  if (isCheckingAuth) {
-    return <SplashScreen message="Checking session..." />;
-  }
+  // We handle it in the main return with animations now.
 
   return (
     <KeyboardAvoidingView
-      style={styles.fullFlex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+      style={styles.fullFlex}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
         <View style={styles.container}>
-          <View style={styles.form}>
-            <Text style={styles.heading}>Login</Text>
-
-            {/* Email */}
-            <View style={styles.field}>
-              <TextInput
-                placeholder="Email"
-                placeholderTextColor="#aaa"
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
-              <Icon name="user" size={20} color="#d2d0d0ff" />
+          {/* Animated Logo */}
+          <Animated.View
+            style={[
+              styles.logoWrapper,
+              {
+                transform: [{ translateY: logoY }, { scale: logoScale }],
+              },
+            ]}
+          >
+            <View style={styles.logoShadow}>
+              <EMSLogo width={100} height={100} />
             </View>
+            <Text style={styles.splashText}>Employee Managment System</Text>
+          </Animated.View>
 
-            {/* Password */}
-            <View style={styles.field}>
-              <TextInput
-                placeholder="Password"
-                placeholderTextColor="#aaa"
-                secureTextEntry={!isPasswordVisible}
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                editable={!isLoading}
-              />
-              <TouchableOpacity
-                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                disabled={isLoading}
-              >
-                <Icon1
-                  name={isPasswordVisible ? 'eye' : 'eye-off'}
-                  size={20}
-                  color="#d2d0d0ff"
-                />
-              </TouchableOpacity>
-            </View>
+          {/* Animated Login Form */}
+          {showForm && (
+            <Animated.View
+              style={[
+                styles.formContainer,
+                {
+                  opacity: formOpacity,
+                  transform: [{ translateY: formY }],
+                },
+              ]}
+            >
+              <View style={styles.form}>
+                <Text style={styles.heading}>Login</Text>
 
-            {/* Login Button */}
-            <View style={styles.btnRow}>
-              <TouchableOpacity
-                style={[styles.button, (isLoading || isSubmitting) && styles.buttonDisabled]}
-                onPress={handleLogin}
-                disabled={isLoading || isSubmitting}
-              >
-                {isLoading || isSubmitting ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={[styles.btnText, styles.btnTextSpacing]}>
-                      {loadingMessage}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.btnText}>Login</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                {/* Email */}
+                <View style={styles.field}>
+                  <TextInput
+                    placeholder="Email"
+                    placeholderTextColor="#aaa"
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                  <Icon name="user" size={20} color="#d2d0d0ff" />
+                </View>
 
-            {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotBtn} disabled={isLoading}>
-              {/* <Text style={styles.forgotText}>Forgot Password?</Text> */}
-            </TouchableOpacity>
-          </View>
+                {/* Password */}
+                <View style={styles.field}>
+                  <TextInput
+                    placeholder="Password"
+                    placeholderTextColor="#aaa"
+                    secureTextEntry={!isPasswordVisible}
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                    disabled={isLoading}
+                  >
+                    <Icon1
+                      name={isPasswordVisible ? 'eye' : 'eye-off'}
+                      size={20}
+                      color="#d2d0d0ff"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Login Button */}
+                <View style={styles.btnRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      (isLoading || isSubmitting) && styles.buttonDisabled,
+                    ]}
+                    onPress={handleLogin}
+                    disabled={isLoading || isSubmitting}
+                  >
+                    {isLoading || isSubmitting ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={[styles.btnText, styles.btnTextSpacing]}>
+                          {loadingMessage}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.btnText}>Login</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Forgot Password */}
+                <TouchableOpacity
+                  style={styles.forgotBtn}
+                  disabled={isLoading}
+                ></TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
@@ -282,22 +398,21 @@ export default Login;
 
 const styles = StyleSheet.create({
   fullFlex: { flex: 1 },
-  splashContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  splashText: {
-    fontSize: 15,
-    color: 'grey',
-  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
+  },
+  logoWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
+    zIndex: 10,
+  },
+  formContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: SCREEN_HEIGHT * 0.28, // Fixed position from top
   },
   form: {
     width: '85%',
@@ -310,7 +425,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
-    elevation: 6,
   },
   heading: {
     textAlign: 'center',
@@ -318,6 +432,9 @@ const styles = StyleSheet.create({
     color: '#222',
     fontSize: 30,
     fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   field: {
     flexDirection: 'row',
@@ -375,5 +492,23 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     textAlign: 'center',
     fontWeight: '500',
+  },
+  splashText: {
+    fontSize: 20,
+    fontWeight: '700',
+    paddingTop: 14,
+    maxWidth: '60%',
+    textAlign: 'center',
+    color: '#333',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  logoShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
 });

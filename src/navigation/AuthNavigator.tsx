@@ -7,7 +7,12 @@ const Stack = createNativeStackNavigator();
 
 const AuthNavigator = () => {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+      }}
+    >
       <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="Tab" component={TabNavigator} />
     </Stack.Navigator>
