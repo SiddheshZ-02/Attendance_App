@@ -1,8 +1,6 @@
 import {
   Animated,
-  Dimensions,
   Pressable,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -17,12 +15,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Geolocation from '@react-native-community/geolocation';
-import {
-  check,
-  request,
-  PERMISSIONS,
-  RESULTS,
-} from 'react-native-permissions';
+import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { useToast } from 'react-native-toast-notifications';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
 import {
@@ -30,8 +23,7 @@ import {
   logAttendance,
   setWorkMode,
 } from '../../features/attendance/attendanceSlice';
-
-const { height } = Dimensions.get('window');
+import { createThemedStyles, useResponsive } from '../../utils/responsive';
 
 const workModeOptions = [
   { label: 'Work from Home', value: 'WFH', icon: 'home-sharp' },
@@ -40,6 +32,8 @@ const workModeOptions = [
 
 const Attendence = () => {
   const scale = useRef(new Animated.Value(1)).current;
+  const { wp } = useResponsive();
+  const styles = useStyles();
 
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [attendanceStats, setAttendanceStats] = useState({
@@ -71,12 +65,6 @@ const Attendence = () => {
   const checkedIn = attendance.checkedIn;
   const selectedMode = attendance.workMode;
 
-
-
-
-
-
-  
   // ═══════════════════════════════════════════════════════════
   // LOAD TODAY'S ATTENDANCE ON MOUNT (GET /api/attendance/today)
   // Restores checkedIn state + stats after app restart
@@ -220,7 +208,10 @@ const Attendence = () => {
   // Cooldown countdown after successful check-in to avoid immediate checkout tap
   useEffect(() => {
     if (cooldownLeft <= 0) return;
-    const t = setTimeout(() => setCooldownLeft(prev => (prev > 0 ? prev - 1 : 0)), 1000);
+    const t = setTimeout(
+      () => setCooldownLeft(prev => (prev > 0 ? prev - 1 : 0)),
+      1000,
+    );
     return () => clearTimeout(t);
   }, [cooldownLeft]);
 
@@ -505,13 +496,13 @@ const Attendence = () => {
 
   const getGreetingMessage = () => {
     const currentHour = new Date().getHours();
-    
+
     if (currentHour >= 5 && currentHour < 12) {
-      return "Good Morning, mark your Attendance";
+      return 'Good Morning, mark your Attendance';
     } else if (currentHour >= 12 && currentHour < 17) {
-      return "Good Afternoon, mark your Attendance";
+      return 'Good Afternoon, mark your Attendance';
     } else {
-      return "Good Evening, mark your Attendance";
+      return 'Good Evening, mark your Attendance';
     }
   };
 
@@ -550,12 +541,8 @@ const Attendence = () => {
       {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>
-            Hey {auth.user?.name || 'User'}!
-          </Text>
-          <Text style={styles.subtitle}>
-            {getGreetingMessage()}
-          </Text>
+          <Text style={styles.title}>Hey {auth.user?.name || 'User'}!</Text>
+          <Text style={styles.subtitle}>{getGreetingMessage()}</Text>
         </View>
         <View style={styles.dropdownContainer}>
           <TouchableOpacity
@@ -566,11 +553,11 @@ const Attendence = () => {
             {selectedModeData ? (
               <Ionicons
                 name={selectedModeData.icon}
-                size={24}
+                size={wp(24)}
                 color="#16A34A"
               />
             ) : (
-              <Ionicons name="location-sharp" size={24} color="#d40909" />
+              <Ionicons name="location-sharp" size={wp(24)} color="#d40909" />
             )}
           </TouchableOpacity>
           {showDropdown && !checkedIn && (
@@ -588,7 +575,7 @@ const Attendence = () => {
                     setShowDropdown(false);
                   }}
                 >
-                  <Ionicons name={option.icon} size={18} color="#333" />
+                  <Ionicons name={option.icon} size={wp(18)} color="#333" />
                   <Text
                     style={[
                       styles.dropdownItemText,
@@ -643,7 +630,11 @@ const Attendence = () => {
                 </>
               ) : cooldownLeft > 0 ? (
                 <>
-                  <MaterialIcons name="timer" size={40} color={activeColor} />
+                  <MaterialIcons
+                    name="timer"
+                    size={wp(40)}
+                    color={activeColor}
+                  />
                   <Text style={[styles.text, { color: activeColor }]}>
                     {displayLabel}
                   </Text>
@@ -652,7 +643,7 @@ const Attendence = () => {
                 <>
                   <MaterialIcons
                     name="touch-app"
-                    size={40}
+                    size={wp(40)}
                     color={activeColor}
                   />
                   <Text style={[styles.text, { color: activeColor }]}>
@@ -668,17 +659,25 @@ const Attendence = () => {
       {/* STATS */}
       <View style={styles.stats}>
         <View style={styles.statItem}>
-          <MaterialIcons name="access-time-filled" size={24} color="#16A34A" />
+          <MaterialIcons
+            name="access-time-filled"
+            size={wp(24)}
+            color="#16A34A"
+          />
           <Text style={styles.statValue}>{attendanceStats.firstCheckIn}</Text>
           <Text style={styles.statLabel}>Check In</Text>
         </View>
         <View style={styles.statItem}>
-          <MaterialIcons name="access-time-filled" size={24} color="#DC2626" />
+          <MaterialIcons
+            name="access-time-filled"
+            size={wp(24)}
+            color="#DC2626"
+          />
           <Text style={styles.statValue}>{attendanceStats.lastCheckOut}</Text>
           <Text style={styles.statLabel}>Check Out</Text>
         </View>
         <View style={styles.statItem}>
-          <MaterialIcons name="more-time" size={24} color="#b49e9e" />
+          <MaterialIcons name="more-time" size={wp(24)} color="#b49e9e" />
           <Text style={styles.statValue}>{attendanceStats.totalHours}</Text>
           <Text style={styles.statLabel}>Total Hrs</Text>
         </View>
@@ -702,13 +701,13 @@ const Attendence = () => {
               style={styles.modalCloseButton}
               onPress={() => setShowLocationModal(false)}
             >
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={wp(24)} color="#666" />
             </TouchableOpacity>
             <View style={styles.modernIconContainer}>
               <View style={styles.iconPulseOuter}>
                 <View style={styles.iconPulseInner}>
                   <View style={styles.iconCircle}>
-                    <Ionicons name="location" size={40} color="#FFFFFF" />
+                    <Ionicons name="location" size={wp(40)} color="#FFFFFF" />
                   </View>
                 </View>
               </View>
@@ -729,7 +728,7 @@ const Attendence = () => {
                 activeOpacity={0.8}
               >
                 <View style={styles.buttonContent}>
-                  <Ionicons name="navigate" size={20} color="#FFFFFF" />
+                  <Ionicons name="navigate" size={wp(20)} color="#FFFFFF" />
                   <Text style={styles.modernPrimaryButtonText}>
                     Open Settings
                   </Text>
@@ -746,7 +745,7 @@ const Attendence = () => {
               </TouchableOpacity>
             </View>
             <View style={styles.privacyNote}>
-              <Ionicons name="shield-checkmark" size={14} color="#16A34A" />
+              <Ionicons name="shield-checkmark" size={wp(14)} color="#16A34A" />
               <Text style={styles.privacyText}>
                 Your location is only used for attendance tracking
               </Text>
@@ -760,11 +759,11 @@ const Attendence = () => {
 
 export default Attendence;
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+const useStyles = createThemedStyles((colors, radius, spacing) => ({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
-    padding: 20,
+    padding: spacing.md,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -774,18 +773,18 @@ const styles = StyleSheet.create({
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F6F8',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 28,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
     gap: 6,
   },
   dropdownMenu: {
     position: 'absolute',
     top: 45,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -793,20 +792,20 @@ const styles = StyleSheet.create({
     elevation: 5,
     minWidth: 160,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: colors.border,
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     gap: 8,
   },
   dropdownItemSelected: { backgroundColor: '#E8F5E9' },
   dropdownItemText: { fontSize: 14, color: '#333', textAlign: 'center' },
-  dropdownItemTextSelected: { color: '#16A34A', fontWeight: '500' },
+  dropdownItemTextSelected: { color: colors.success, fontWeight: '500' },
   timeContainer: {
-    height: height * 0.2,
+    height: '20%',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
@@ -816,13 +815,13 @@ const styles = StyleSheet.create({
   screen: {
     justifyContent: 'center',
     alignItems: 'center',
-    height: height * 0.42,
+    height: '42%',
   },
   outerRing: {
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: '#F5F6F8',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -835,7 +834,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -859,7 +858,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    paddingBottom: 20,
+    paddingBottom: spacing.md,
   },
   statItem: { alignItems: 'center' },
   statValue: { fontSize: 16, fontWeight: '600', marginTop: 4 },
@@ -871,12 +870,12 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   modernModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingTop: 8,
     paddingBottom: 34,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -886,8 +885,8 @@ const styles = StyleSheet.create({
   modalTopBar: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
+    backgroundColor: colors.border,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginBottom: 8,
   },
@@ -898,7 +897,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -941,24 +940,24 @@ const styles = StyleSheet.create({
   modernModalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   modernModalSubtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 16,
   },
   modernButtonsContainer: { gap: 12, marginBottom: 16 },
   modernPrimaryButton: {
-    backgroundColor: '#16A34A',
-    borderRadius: 14,
+    backgroundColor: colors.success,
+    borderRadius: radius.md,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#16A34A',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -972,12 +971,12 @@ const styles = StyleSheet.create({
   },
   modernSecondaryButton: {
     backgroundColor: 'transparent',
-    borderRadius: 14,
+    borderRadius: radius.md,
     paddingVertical: 14,
     alignItems: 'center',
   },
   modernSecondaryButtonText: {
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -988,5 +987,9 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 8,
   },
-  privacyText: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
-});
+  privacyText: {
+    fontSize: 12,
+    color: colors.textDisabled,
+    fontStyle: 'italic',
+  },
+}));

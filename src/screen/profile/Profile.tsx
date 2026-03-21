@@ -1,5 +1,4 @@
 import {
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,11 +14,14 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
 import { checkSession, logout } from '../../features/auth/authSlice';
+import { createThemedStyles, useResponsive } from '../../utils/responsive';
 
 const Profile = () => {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(state => state.auth);
+  const { wp } = useResponsive();
+  const styles = useStyles();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -86,7 +88,7 @@ const Profile = () => {
           style={styles.avatarSmall}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="angle-left" size={40} color="#a88a8aff" />
+          <Icon name="angle-left" size={wp(40)} color="#a88a8aff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity
@@ -104,7 +106,7 @@ const Profile = () => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* AVATAR + NAME + POSITION */}
         <View style={styles.profileSection}>
-          <Icon name="user-circle" size={150} color="#a88a8aff" />
+          <Icon name="user-circle" size={wp(150)} color="#a88a8aff" />
           <Text style={styles.name}>{user?.name || 'Employee'}</Text>
           {user?.position ? (
             <Text style={styles.roleTag}>{user.position}</Text>
@@ -183,7 +185,7 @@ const Profile = () => {
               onPress={() => setShowLogoutModal(false)}
               disabled={isLoggingOut}
             >
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={wp(24)} color="#666" />
             </TouchableOpacity>
 
             {/* Icon — red circles like location modal's yellow circles */}
@@ -193,7 +195,7 @@ const Profile = () => {
                   <View style={styles.iconCircle}>
                     <Ionicons
                       name="log-out-outline"
-                      size={40}
+                      size={wp(40)}
                       color="#FFFFFF"
                     />
                   </View>
@@ -227,7 +229,7 @@ const Profile = () => {
                   <View style={styles.buttonContent}>
                     <Ionicons
                       name="log-out-outline"
-                      size={20}
+                      size={wp(20)}
                       color="#FFFFFF"
                     />
                     <Text style={styles.logoutConfirmText}>Yes, Logout</Text>
@@ -247,7 +249,7 @@ const Profile = () => {
 
             {/* Security note */}
             <View style={styles.noteRow}>
-              <Ionicons name="shield-checkmark" size={14} color="#16A34A" />
+              <Ionicons name="shield-checkmark" size={wp(14)} color="#16A34A" />
               <Text style={styles.noteText}>
                 Your session will be securely ended
               </Text>
@@ -261,8 +263,8 @@ const Profile = () => {
 
 export default Profile;
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
+const useStyles = createThemedStyles((colors, radius, spacing) => ({
+  screen: { flex: 1, backgroundColor: colors.background },
   centeredContent: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: 'grey' },
   header: {
@@ -270,10 +272,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.md,
   },
   headerTitle: { fontSize: 18, fontWeight: '500' },
-  logout: { fontSize: 16, fontWeight: '500', color: 'red' },
+  logout: { fontSize: 16, fontWeight: '500', color: colors.error },
   avatarSmall: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -282,7 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   profileSection: {
-    paddingVertical: 30,
+    paddingVertical: spacing.xl,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
@@ -290,41 +292,41 @@ const styles = StyleSheet.create({
   name: { fontSize: 20, fontWeight: '600' },
   roleTag: {
     fontSize: 13,
-    color: '#6B7280',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
+    color: colors.textSecondary,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
     overflow: 'hidden',
   },
-  bottomContainer: { padding: 20 },
+  bottomContainer: { padding: spacing.md },
   sectionTitle: {
     fontSize: 18,
-    marginBottom: 20,
-    color: 'blue',
+    marginBottom: spacing.md,
+    color: colors.primary,
     fontWeight: '500',
   },
-  inputWrapper: { marginBottom: 22, position: 'relative' },
+  inputWrapper: { marginBottom: spacing.lg, position: 'relative' },
   label: {
     position: 'absolute',
     top: -10,
     left: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     paddingHorizontal: 6,
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     zIndex: 1,
   },
   input: {
     height: 54,
     borderWidth: 1,
-    borderColor: '#9CA3AF',
-    borderRadius: 8,
-    paddingHorizontal: 14,
+    borderColor: colors.textDisabled,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
     fontSize: 15,
-    color: '#111827',
+    color: colors.text,
   },
-  readOnly: { backgroundColor: '#F9FAFB', color: '#374151' },
+  readOnly: { backgroundColor: colors.surface, color: colors.textSecondary },
 
   // ── Modal ──────────────────────────────────────────────────────
   modalOverlay: {
@@ -334,12 +336,12 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingTop: 8,
     paddingBottom: 34,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -349,8 +351,8 @@ const styles = StyleSheet.create({
   modalTopBar: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
+    backgroundColor: colors.border,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginBottom: 8,
   },
@@ -361,7 +363,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -387,10 +389,10 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.error,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#DC2626',
+    shadowColor: colors.error,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
@@ -400,24 +402,24 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 16,
   },
   modalButtonsContainer: { gap: 12, marginBottom: 16 },
   logoutConfirmButton: {
-    backgroundColor: '#DC2626',
-    borderRadius: 14,
+    backgroundColor: colors.error,
+    borderRadius: radius.md,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#DC2626',
+    shadowColor: colors.error,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -427,11 +429,11 @@ const styles = StyleSheet.create({
   logoutConfirmText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
   cancelButton: {
     backgroundColor: 'transparent',
-    borderRadius: 14,
+    borderRadius: radius.md,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  cancelButtonText: { color: '#6B7280', fontSize: 16, fontWeight: '500' },
+  cancelButtonText: { color: colors.textSecondary, fontSize: 16, fontWeight: '500' },
   noteRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -439,5 +441,5 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 8,
   },
-  noteText: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
-});
+  noteText: { fontSize: 12, color: colors.textDisabled, fontStyle: 'italic' },
+}));

@@ -1,6 +1,13 @@
 // ================================================================
-//  ENTERPRISE RESPONSIVE SYSTEM v2.1
+//  ENTERPRISE RESPONSIVE SYSTEM v2.2  (Bug-Fixed)
 //  Single-file · TypeScript · Production-Ready · Single Theme
+//
+//  ✅ Fixed Bugs:
+//    #1 — insets object in useMemo deps → busted memo every render
+//    #2 — ref.current as useMemo dep → React never tracks it
+//    #3 — useStableRef was a broken pattern → removed entirely
+//    #4 — isBoldTextEnabled not guarded → crashed on older RN
+//    #5 — unused `useRef` import after #3 fix → TS warning
 //
 //  Exports:
 //    Providers  → <AppSystemProvider>
@@ -15,9 +22,9 @@ import React, {
   useContext,
   useMemo,
   useEffect,
-  useRef,
   useState,
   ReactNode,
+  // ✅ FIX #5 — removed `useRef` import (was only used by deleted useStableRef)
 } from 'react';
 import {
   useWindowDimensions,
@@ -268,13 +275,17 @@ const A11yProvider = ({ children }: { children: ReactNode }) => {
   const [boldText,     setBoldText]     = useState(false);
 
   useEffect(() => {
+    // Reduce motion — supported on both iOS and Android
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
     const sub1 = AccessibilityInfo.addEventListener(
       'reduceMotionChanged',
       setReduceMotion,
     );
 
-    if (Platform.OS === 'ios') {
+    // ✅ FIX #4 — guard isBoldTextEnabled before calling it.
+    // It exists since RN 0.64 iOS-only. Calling without the guard
+    // on Android or older RN threw: "isBoldTextEnabled is not a function"
+    if (Platform.OS === 'ios' && typeof AccessibilityInfo.isBoldTextEnabled === 'function') {
       AccessibilityInfo.isBoldTextEnabled().then(setBoldText);
       const sub2 = AccessibilityInfo.addEventListener(
         'boldTextChanged',
@@ -305,7 +316,12 @@ const ResponsiveProvider = ({ children }: { children: ReactNode }) => {
   const { width, height } = useWindowDimensions();
   const insets            = useSafeAreaInsets();
 
-  // All derived values memoized — recomputes only when width/height change
+  // ✅ FIX #1 — useSafeAreaInsets() returns a NEW object reference on
+  // every parent render. Putting `insets` directly in the deps array
+  // caused useMemo to bust on EVERY render, making memoization useless.
+  // Fix: destructure to primitive numbers — React compares these by value.
+  const { top, bottom, left, right } = insets;
+
   const value = useMemo<ResponsiveReturn>(() => {
     // ── Ratios ──────────────────────────────────────────────────
     const wRatio    = width  / BASE_WIDTH;
@@ -370,6 +386,10 @@ const ResponsiveProvider = ({ children }: { children: ReactNode }) => {
       full: 9999,
     };
 
+    // Reconstruct insets from stable primitives so the return object
+    // stays consistent with the ReturnType<typeof useSafeAreaInsets> shape
+    const stableInsets = { top, bottom, left, right };
+
     return {
       wp, hp, ms, fp,
       spacing,
@@ -380,12 +400,13 @@ const ResponsiveProvider = ({ children }: { children: ReactNode }) => {
       isLandscape,
       containerMaxWidth: isTablet ? 680 : undefined,
       rowOnTablet:       isTablet ? 'row' : 'column',
-      insets,
+      insets:            stableInsets,
       SCREEN: { width, height },
       IS_IOS:     Platform.OS === 'ios',
       IS_ANDROID: Platform.OS === 'android',
     };
-  }, [width, height, insets]);
+    // ✅ FIX #1 continued — deps are now stable primitives, not an object
+  }, [width, height, top, bottom, left, right]);
 
   return (
     <ResponsiveContext.Provider value={value}>
@@ -419,7 +440,7 @@ export const AppSystemProvider = ({ children }: { children: ReactNode }) => (
 /**
  * useResponsive
  * Returns live scaling functions and layout tokens.
- * Re-renders only when screen dimensions change (rotation, split-view).
+ * Re-renders only when screen dimensions or safe area insets change.
  */
 export const useResponsive = (): ResponsiveReturn => {
   const ctx = useContext(ResponsiveContext);
@@ -454,7 +475,7 @@ export const useA11y = (): A11yContextValue => useContext(A11yContext);
  *
  * const cols = useAdaptiveValue(1, 3); // 1 on phone, 3 on tablet
  */
-export const useAdaptiveValue = <T>(phoneValue: T, tabletValue: T): T => {
+export function useAdaptiveValue<T>(phoneValue: T, tabletValue: T): T {
   const { isTablet } = useResponsive();
   return isTablet ? tabletValue : phoneValue;
 };
@@ -488,25 +509,23 @@ export function createThemedStyles<T extends StyleSheet.NamedStyles<T>>(
   return function useStyles(): T {
     const { colors }          = useAppTheme();
     const { radius, spacing } = useResponsive();
-    const prevColorsRef       = useStableRef(colors);
 
+    // ✅ FIX #2 + #3 — Previous code used `prevColorsRef.current` as a
+    // useMemo dependency. React does NOT track ref.current mutations —
+    // the dep was silently broken and would never trigger a re-run.
+    // Also removed `useStableRef` helper entirely (FIX #3) since it only
+    // existed to support this broken pattern.
+    //
+    // Correct approach: APP_THEME.colors is a module-level constant —
+    // its reference never changes, so it is safe to omit from deps.
+    // Only `radius` and `spacing` change (on screen resize), so those
+    // are the only real dependencies here.
     return useMemo(
       () => StyleSheet.create(factory(colors, radius, spacing)),
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [prevColorsRef.current, radius, spacing],
+      [radius, spacing],
     );
   };
-}
-
-// ================================================================
-// 🔧  INTERNAL UTILITIES
-// ================================================================
-
-/** Holds the latest value in a ref without triggering re-renders */
-function useStableRef<T>(value: T) {
-  const ref = useRef(value);
-  ref.current = value;
-  return ref;
 }
 
 // ================================================================

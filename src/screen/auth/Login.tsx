@@ -1,6 +1,5 @@
 import {
   Keyboard,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   Easing,
   Platform,
   KeyboardAvoidingView,
@@ -23,14 +21,15 @@ import { getCurrentLocation } from '../../services/location/locationService';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
 import { checkSession, login } from '../../features/auth/authSlice';
 import EMSLogo from '../../assets/svg/EMS.svg';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { createThemedStyles, useResponsive } from '../../utils/responsive';
 
 const Login = () => {
   const navigation = useNavigation();
   const toast = useToast();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(state => state.auth);
+  const { hp, wp, SCREEN, containerMaxWidth } = useResponsive();
+  const styles = useStyles();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,9 +44,9 @@ const Login = () => {
   const hasNavigated = useRef(false);
 
   // Animated values
-  const logoY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const logoY = useRef(new Animated.Value(SCREEN.height)).current;
   const logoScale = useRef(new Animated.Value(1.5)).current;
-  const formY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const formY = useRef(new Animated.Value(SCREEN.height)).current;
   const formOpacity = useRef(new Animated.Value(0)).current;
 
   const isLoading = auth.status === 'loading';
@@ -56,7 +55,7 @@ const Login = () => {
     // 1. Initial Logo Animation: Bottom to Center
     Animated.parallel([
       Animated.timing(logoY, {
-        toValue: SCREEN_HEIGHT / 2 - 100,
+        toValue: SCREEN.height / 2 - hp(100),
         duration: 1000,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -95,7 +94,7 @@ const Login = () => {
         Animated.parallel([
           // Logo to top
           Animated.timing(logoY, {
-            toValue: 60,
+            toValue: hp(60),
             duration: 800,
             easing: Easing.out(Easing.exp),
             useNativeDriver: true,
@@ -299,7 +298,7 @@ const Login = () => {
             ]}
           >
             <View style={styles.logoShadow}>
-              <EMSLogo width={100} height={100} />
+              <EMSLogo width={wp(100)} height={wp(100)} />
             </View>
             <Text style={styles.splashText}>Employee Managment System</Text>
           </Animated.View>
@@ -315,7 +314,7 @@ const Login = () => {
                 },
               ]}
             >
-              <View style={styles.form}>
+              <View style={[styles.form, containerMaxWidth ? { maxWidth: containerMaxWidth } : null]}>
                 <Text style={styles.heading}>Login</Text>
 
                 {/* Email */}
@@ -331,7 +330,7 @@ const Login = () => {
                     autoCorrect={false}
                     editable={!isLoading}
                   />
-                  <Icon name="user" size={20} color="#d2d0d0ff" />
+                  <Icon name="user" size={wp(20)} color="#d2d0d0ff" />
                 </View>
 
                 {/* Password */}
@@ -351,7 +350,7 @@ const Login = () => {
                   >
                     <Icon1
                       name={isPasswordVisible ? 'eye' : 'eye-off'}
-                      size={20}
+                      size={wp(20)}
                       color="#d2d0d0ff"
                     />
                   </TouchableOpacity>
@@ -396,11 +395,11 @@ const Login = () => {
 
 export default Login;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((colors, radius, spacing) => ({
   fullFlex: { flex: 1 },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   logoWrapper: {
     position: 'absolute',
@@ -412,15 +411,15 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: SCREEN_HEIGHT * 0.28, // Fixed position from top
+    justifyContent: 'center',
   },
   form: {
     width: '85%',
     backgroundColor: '#d2d0d0ff',
-    borderRadius: 25,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    paddingTop: 10,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -428,7 +427,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     textAlign: 'center',
-    marginVertical: 24,
+    marginVertical: spacing.lg,
     color: '#222',
     fontSize: 30,
     fontWeight: '600',
@@ -440,30 +439,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F4F6F8',
-    borderRadius: 25,
-    padding: 8,
-    marginBottom: 12,
+    borderRadius: radius.full,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     elevation: 5,
-    paddingRight: 30,
+    paddingRight: spacing.xl,
   },
   input: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: spacing.sm,
     color: '#111',
     fontSize: 15,
   },
   btnRow: {
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: spacing.xl,
   },
   button: {
     backgroundColor: '#252525',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    marginHorizontal: 6,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.sm,
+    marginHorizontal: spacing.xxs,
     alignItems: 'center',
   },
   buttonDisabled: {
@@ -481,22 +480,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   btnTextSpacing: {
-    marginLeft: 10,
+    marginLeft: spacing.sm,
   },
   forgotBtn: {
-    marginTop: 18,
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  forgotText: {
-    color: '#DC2626',
-    textAlign: 'center',
-    fontWeight: '500',
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.xs,
   },
   splashText: {
     fontSize: 20,
     fontWeight: '700',
-    paddingTop: 14,
+    paddingTop: spacing.sm,
     maxWidth: '60%',
     textAlign: 'center',
     color: '#333',
@@ -511,4 +505,4 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
     elevation: 8,
   },
-});
+}));
