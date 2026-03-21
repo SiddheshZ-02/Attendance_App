@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, Modal, Pressable, TouchableOpacity, Animated } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useResponsive } from '../../../utils/responsive';
@@ -86,4 +86,4 @@ const LocationModal: React.FC<Props> = ({ visible, onClose, onEnable, styles }) 
   );
 };
 
-export default LocationModal;
+export default memo(LocationModal);

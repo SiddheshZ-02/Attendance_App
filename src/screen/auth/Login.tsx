@@ -38,6 +38,7 @@ const Login = () => {
   const [loadingMessage, setLoadingMessage] = useState('Logging in...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // const [focusedField, setFocusedField] = useState<string | null>(null);
 
   // Phase management
   const [isSplashDone, setIsSplashDone] = useState(false);
@@ -302,7 +303,7 @@ const Login = () => {
               ]}
             >
               <View style={styles.logoShadow}>
-                <EMSLogo width={wp(100)} height={wp(100)} />
+                <EMSLogo width={wp(80)} height={wp(80)} />
               </View>
               <Text style={styles.splashText}>Employee Managment System</Text>
             </Animated.View>
@@ -320,12 +321,17 @@ const Login = () => {
               >
                 <View style={[styles.form, containerMaxWidth ? { maxWidth: containerMaxWidth } : null]}>
                   <Text style={styles.heading}>Login</Text>
+                  {/* <Text style={styles.subHeading}>Access your workforce dashboard</Text> */}
 
                   {/* Email */}
+                  <View style={styles.inputLabelContainer}>
+                    <Text style={styles.inputLabel}>Email Address</Text>
+                  </View>
                   <View style={styles.field}>
+                    <Icon name="envelope-o" size={wp(18)} color={ '#0A1F4A'} />
                     <TextInput
-                      placeholder="Email"
-                      placeholderTextColor="#aaa"
+                      placeholder="Enter your email"
+                      placeholderTextColor="#5A6272"
                       style={styles.input}
                       value={email}
                       onChangeText={setEmail}
@@ -333,29 +339,36 @@ const Login = () => {
                       autoCapitalize="none"
                       autoCorrect={false}
                       editable={!isLoading}
+                      // onFocus={() => setFocusedField('email')}
+                      // onBlur={() => setFocusedField(null)}
                     />
-                    <Icon name="user" size={wp(20)} color="#d2d0d0ff" />
                   </View>
 
                   {/* Password */}
-                  <View style={styles.field}>
+                  <View style={styles.inputLabelContainer}>
+                    <Text style={styles.inputLabel}>Password</Text>
+                  </View>
+                  <View style={styles.field }>
+                    <Icon1 name="lock-closed-outline" size={wp(18)} color={ '#0A1F4A'} />
                     <TextInput
-                      placeholder="Password"
-                      placeholderTextColor="#aaa"
+                      placeholder="Enter your password"
+                      placeholderTextColor="#5A6272"
                       secureTextEntry={!isPasswordVisible}
                       style={styles.input}
                       value={password}
                       onChangeText={setPassword}
                       editable={!isLoading}
+                      // onFocus={() => setFocusedField('password')}
+                      // onBlur={() => setFocusedField(null)}
                     />
                     <TouchableOpacity
                       onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                       disabled={isLoading}
                     >
                       <Icon1
-                        name={isPasswordVisible ? 'eye' : 'eye-off'}
+                        name={isPasswordVisible ? 'eye-outline' : 'eye-off-outline'}
                         size={wp(20)}
-                        color="#d2d0d0ff"
+                        color={'#0A1F4A'}
                       />
                     </TouchableOpacity>
                   </View>
@@ -369,10 +382,11 @@ const Login = () => {
                       ]}
                       onPress={handleLogin}
                       disabled={isLoading || isSubmitting}
+                      activeOpacity={0.8}
                     >
                       {isLoading || isSubmitting ? (
                         <View style={styles.loadingContainer}>
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color="#FFFFFF" />
                           <Text style={[styles.btnText, styles.btnTextSpacing]}>
                             {loadingMessage}
                           </Text>
@@ -383,11 +397,11 @@ const Login = () => {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Forgot Password */}
-                  <TouchableOpacity
-                    style={styles.forgotBtn}
-                    disabled={isLoading}
-                  ></TouchableOpacity>
+                  {/* Footer Info */}
+                  {/* <View style={styles.footerInfo}> */}
+                    {/* <Icon1 name="shield-checkmark-outline" size={wp(14)} color="#2A7A99" />
+                    <Text style={styles.footerText}>Secure Enterprise Access</Text> */}
+                  {/* </View> */}
                 </View>
               </Animated.View>
             )}
@@ -420,82 +434,124 @@ const useStyles = createThemedStyles((colors, { radius, spacing, hp, wp, fp }) =
     formContainer: {
       flex: 1,
       alignItems: 'center',
-      paddingTop: hp(250), // Scaled to start below animated logo
+      paddingTop: hp(220), // Scaled to start below animated logo
     },
     form: {
-      width: '85%',
-      backgroundColor: '#d2d0d0ff',
+      width: '90%',
+      backgroundColor: '#0A1F4A', // Enterprise Dark Blue
       borderRadius: radius.xl,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
-      paddingTop: spacing.xs,
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.xl,
+      paddingTop: spacing.lg,
+      borderWidth: 1,
+      borderColor: '#0D2B5E',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: hp(8) },
-      shadowOpacity: 0.08,
-      shadowRadius: wp(10),
-      elevation: 5,
+      // shadowOffset: { width: 0, height: hp(10) },
+      // shadowOpacity: 0.3,
+      // shadowRadius: wp(15),
+      // elevation: 10,
     },
     heading: {
       textAlign: 'center',
-      marginVertical: spacing.lg,
-      color: '#222',
-      fontSize: fp(30),
+      marginVertical: spacing.md,
+      color: '#FFF',
+      fontSize: fp(28),
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+    subHeading: {
+      textAlign: 'center',
+      color: '#00AACC',
+      fontSize: fp(14),
+      marginTop: spacing.xs,
+      marginBottom: spacing.xl,
+      fontWeight: '400',
+    },
+    inputLabelContainer: {
+      marginBottom: spacing.xs,
+      marginLeft: spacing.xs,
+    },
+    inputLabel: {
+      color: '#fff',
+      fontSize: fp(13),
       fontWeight: '600',
-      textShadowColor: 'rgba(0, 0, 0, 0.1)',
-      textShadowOffset: { width: wp(1), height: hp(1) },
-      textShadowRadius: wp(2),
+      opacity: 0.9,
     },
     field: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#F4F6F8',
-      borderRadius: radius.full,
-      padding: spacing.sm,
-      marginBottom: spacing.sm,
+      // backgroundColor: '#0A1F4A',
+      //  // Darker blue for inputs
+       backgroundColor: '#F4F6F8',
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.xs,
+      marginBottom: spacing.lg,
       borderWidth: 1,
-      borderColor: colors.border,
-      elevation: 5,
-      paddingRight: spacing.xl,
+      borderColor: '#0D2B5E',
+    },
+    fieldFocused: {
+      borderColor: '#00D4FF',
+      backgroundColor: '#0E3A6E',
+      shadowColor: '#00D4FF',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.2,
+      shadowRadius: wp(4),
+      elevation: 4,
     },
     input: {
       flex: 1,
       marginLeft: spacing.sm,
-      color: '#111',
+      color: '#0A1F4A',
       fontSize: fp(15),
     },
     btnRow: {
       justifyContent: 'center',
-      marginTop: spacing.xl,
+      marginTop: spacing.md,
     },
     button: {
-      backgroundColor: '#252525',
+      backgroundColor: '#6B7280', // Primary action color
       paddingVertical: spacing.md,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.sm,
-      marginHorizontal: spacing.xxs,
+      borderRadius: radius.md,
       alignItems: 'center',
+      // shadowColor: '#00D4FF',
+      // shadowOffset: { width: 0, height: hp(4) },
+      // shadowOpacity: 0.3,
+      // shadowRadius: wp(6),
+      // elevation: 6,
     },
     buttonDisabled: {
-      backgroundColor: '#666',
-      opacity: 0.7,
+      backgroundColor: '#0E3A6E',
+      shadowOpacity: 0,
+      elevation: 0,
     },
     loadingContainer: {
       flexDirection: 'row',
       alignItems: 'center',
     },
     btnText: {
-      color: '#fff',
+      color: '#00D4FF', // Contrast text on cyan button
       textAlign: 'center',
-      fontWeight: '500',
-      fontSize: fp(16),
+      fontWeight: '700',
+      fontSize: fp(17),
+      letterSpacing: 0.5,
     },
     btnTextSpacing: {
       marginLeft: spacing.sm,
+      color: '#FFFFFF',
     },
-    forgotBtn: {
-      marginTop: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.xs,
+    footerInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: spacing.xl,
+      opacity: 0.7,
+    },
+    footerText: {
+      color: '#2A7A99',
+      fontSize: fp(12),
+      marginLeft: spacing.xs,
+      fontWeight: '500',
     },
     splashText: {
       fontSize: fp(20),
@@ -504,7 +560,7 @@ const useStyles = createThemedStyles((colors, { radius, spacing, hp, wp, fp }) =
       maxWidth: '60%',
       textAlign: 'center',
       color: '#333',
-      textShadowColor: 'rgba(0, 0, 0, 0.2)',
+      textShadowColor: 'rgba(0, 0, 0, 0.1)',
       textShadowOffset: { width: wp(1), height: hp(1) },
       textShadowRadius: wp(3),
     },

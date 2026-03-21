@@ -1,12 +1,12 @@
-import React from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, ActivityIndicator, StatusBar, ScrollView, RefreshControl } from 'react-native';
 import { useAttendance } from './hooks/useAttendance';
 import AttendanceHeader from './components/AttendanceHeader';
 import AttendanceClock from './components/AttendanceClock';
 import AttendanceButton from './components/AttendanceButton';
 import AttendanceStats from './components/AttendanceStats';
 import LocationModal from './components/LocationModal';
-import { createThemedStyles, useResponsive } from '../../utils/responsive';
+import { createThemedStyles } from '../../utils/responsive';
 
 const workModeOptions = [
   { label: 'Work from Home', value: 'WFH', icon: 'home-sharp' },
@@ -16,7 +16,6 @@ const workModeOptions = [
 const Attendance = () => {
   const {
     scale,
-    currentTime,
     attendanceStats,
     showDropdown,
     setShowDropdown,
@@ -25,6 +24,8 @@ const Attendance = () => {
     isLoading,
     loadingMessage,
     isFetchingToday,
+    refreshing,
+    onRefresh,
     cooldownLeft,
     checkedIn,
     selectedMode,
@@ -34,80 +35,87 @@ const Attendance = () => {
     handleSetWorkMode,
     pressIn,
     pressOut,
-    formatTime,
   } = useAttendance();
 
   const styles = useStyles();
 
-  const activeColor = checkedIn ? '#DC2626' : '#16A34A';
-  const label = checkedIn ? 'Check Out' : 'Check In';
-  const displayLabel = cooldownLeft > 0 ? `Wait ${cooldownLeft}s` : label;
-  const selectedModeData = workModeOptions.find(m => m.value === selectedMode);
+  const activeColor = useMemo(() => (checkedIn ? '#DC2626' : '#16A34A'), [checkedIn]);
+  const label = useMemo(() => (checkedIn ? 'Check Out' : 'Check In'), [checkedIn]);
+  const displayLabel = useMemo(
+    () => (cooldownLeft > 0 ? `Wait ${cooldownLeft}s` : label),
+    [cooldownLeft, label],
+  );
+  const selectedModeData = useMemo(
+    () => workModeOptions.find(m => m.value === selectedMode),
+    [selectedMode],
+  );
 
-  const getGreetingMessage = () => {
+  const greetingMessage = useMemo(() => {
     const currentHour = new Date().getHours();
     if (currentHour >= 5 && currentHour < 12) return 'Good Morning, mark your Attendance';
     if (currentHour >= 12 && currentHour < 17) return 'Good Afternoon, mark your Attendance';
     return 'Good Evening, mark your Attendance';
-  };
-
-  const formatDate = (date: Date) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} · ${days[date.getDay()]}`;
-  };
-
-  if (isFetchingToday) {
-    return (
-      <View style={[styles.container, styles.loadingCenter]}>
-        <ActivityIndicator size="large" color="#16A34A" />
-        <Text style={styles.loadingAttendanceText}>Loading attendance...</Text>
-      </View>
-    );
-  }
+  }, []);
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#0A1F4A']}
+          tintColor="#0A1F4A"
+        />
+      }
+    >
+      <StatusBar backgroundColor="#0A1F4A" barStyle="light-content" />
       <AttendanceHeader
         userName={auth.user?.name || 'User'}
-        greeting={getGreetingMessage()}
+        greeting={greetingMessage}
         selectedMode={selectedMode}
         selectedModeData={selectedModeData}
         showDropdown={showDropdown}
         setShowDropdown={setShowDropdown}
-        isLoading={isLoading}
+        isLoading={isLoading || isFetchingToday}
         checkedIn={checkedIn}
         workModeOptions={workModeOptions}
         handleSetWorkMode={handleSetWorkMode}
         styles={styles}
       />
 
-      {selectedModeData && (
-        <Text style={[styles.dropdownItemText, styles.dropdownItemTextSelected]}>
-          {selectedModeData.label}
-        </Text>
+      {isFetchingToday ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator size="large" color="#16A34A" />
+          <Text style={styles.loadingAttendanceText}>Loading attendance...</Text>
+        </View>
+      ) : (
+        <>
+          {selectedModeData && (
+            <Text style={[styles.dropdownItemText, styles.dropdownItemTextSelectedName]}>
+              {selectedModeData.label}
+            </Text>
+          )}
+
+          <AttendanceClock styles={styles} />
+
+          <AttendanceButton
+            scale={scale}
+            pressIn={pressIn}
+            pressOut={pressOut}
+            handlePress={handlePress}
+            isLoading={isLoading}
+            cooldownLeft={cooldownLeft}
+            activeColor={activeColor}
+            displayLabel={displayLabel}
+            loadingMessage={loadingMessage}
+            styles={styles}
+          />
+
+          <AttendanceStats stats={attendanceStats} styles={styles} />
+        </>
       )}
-
-      <AttendanceClock
-        time={formatTime(currentTime)}
-        date={formatDate(currentTime)}
-        styles={styles}
-      />
-
-      <AttendanceButton
-        scale={scale}
-        pressIn={pressIn}
-        pressOut={pressOut}
-        handlePress={handlePress}
-        isLoading={isLoading}
-        cooldownLeft={cooldownLeft}
-        activeColor={activeColor}
-        displayLabel={displayLabel}
-        loadingMessage={loadingMessage}
-        styles={styles}
-      />
-
-      <AttendanceStats stats={attendanceStats} styles={styles} />
 
       <LocationModal
         visible={showLocationModal}
@@ -115,7 +123,7 @@ const Attendance = () => {
         onEnable={handleEnableLocation}
         styles={styles}
       />
-    </View>
+    </ScrollView>
   );
 };
 
@@ -169,8 +177,8 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
       gap: wp(8),
     },
     dropdownItemSelected: { backgroundColor: '#E8F5E9' },
-    dropdownItemText: { fontSize: fp(18), color: '#333', textAlign: 'center' },
-    dropdownItemTextSelected: { color: colors.success, fontWeight: '500', paddingTop: hp(28) },
+    dropdownItemText: { fontSize: fp(14), color: '#333', textAlign: 'center' },
+    dropdownItemTextSelectedName: { color: colors.success, fontWeight: '500', paddingTop: hp(28) },
     timeContainer: {
       height: '20%',
       justifyContent: 'center',

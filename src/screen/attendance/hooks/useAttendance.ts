@@ -8,23 +8,17 @@ import {
   fetchTodayAttendance,
   logAttendance,
   setWorkMode,
+  updateTotalHours,
 } from '../../../features/attendance/attendanceSlice';
 
 export const useAttendance = () => {
   const scale = useRef(new Animated.Value(1)).current;
-  const [currentTime, setCurrentTime] = useState(() => new Date());
-  const [attendanceStats, setAttendanceStats] = useState({
-    firstCheckIn: '--:--',
-    lastCheckOut: '--:--',
-    totalHours: '--:--',
-    checkInDate: null as Date | null,
-    checkOutDate: null as Date | null,
-  });
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [isFetchingToday, setIsFetchingToday] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
   const isProcessing = useRef(false);
@@ -41,54 +35,36 @@ export const useAttendance = () => {
 
   const checkedIn = attendance.checkedIn;
   const selectedMode = attendance.workMode;
+  const attendanceStats = attendance.stats;
 
-  const formatTime = (date: Date) => {
+  const formatTime = useCallback((date: Date) => {
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h = hours % 12 || 12;
     const m = minutes < 10 ? `0${minutes}` : minutes;
     return `${h}:${m} ${ampm}`;
-  };
-
-  const calculateTotalHours = (checkIn: Date, checkOut: Date) => {
-    const diffMs = checkOut.getTime() - checkIn.getTime();
-    if (diffMs <= 0) return '--:--';
-    const totalMinutes = Math.floor(diffMs / (1000 * 60));
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
-  };
+  }, []);
 
   const loadTodayAttendance = useCallback(async () => {
     try {
       setIsFetchingToday(true);
-      const result = await dispatch(fetchTodayAttendance()).unwrap();
-
-      if (result && result.attendance) {
-        const checkInDate = result.attendance.checkInTime
-          ? new Date(result.attendance.checkInTime)
-          : null;
-        const checkOutDate = result.attendance.checkOutTime
-          ? new Date(result.attendance.checkOutTime)
-          : null;
-
-        setAttendanceStats(prev => ({
-          ...prev,
-          firstCheckIn: checkInDate ? formatTime(checkInDate) : '--:--',
-          lastCheckOut: checkOutDate ? formatTime(checkOutDate) : '--:--',
-          totalHours:
-            checkInDate && checkOutDate
-              ? calculateTotalHours(checkInDate, checkOutDate)
-              : '--:--',
-          checkInDate,
-          checkOutDate,
-        }));
-      }
+      await dispatch(fetchTodayAttendance()).unwrap();
     } catch (error) {
       console.error('❌ Load today attendance error:', error);
     } finally {
       setIsFetchingToday(false);
+    }
+  }, [dispatch]);
+
+  const onRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      await dispatch(fetchTodayAttendance()).unwrap();
+    } catch (error) {
+      console.error('❌ Refresh today attendance error:', error);
+    } finally {
+      setRefreshing(false);
     }
   }, [dispatch]);
 
@@ -186,11 +162,6 @@ export const useAttendance = () => {
   }, [checkGPSStatus]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     if (cooldownLeft <= 0) return;
     const t = setTimeout(
       () => setCooldownLeft(prev => (prev > 0 ? prev - 1 : 0)),
@@ -201,17 +172,16 @@ export const useAttendance = () => {
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
-    if (checkedIn && attendanceStats.checkInDate) {
+    if (checkedIn) {
+      dispatch(updateTotalHours()); // Initial update
       interval = setInterval(() => {
-        const now = new Date();
-        const total = calculateTotalHours(attendanceStats.checkInDate!, now);
-        setAttendanceStats(prev => ({ ...prev, totalHours: total }));
+        dispatch(updateTotalHours());
       }, 60000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [checkedIn, attendanceStats.checkInDate]);
+  }, [checkedIn, dispatch]);
 
   const validateLocationRequirements = async (): Promise<void> => {
     const permitted = await ensureLocationPermission();
@@ -304,7 +274,7 @@ export const useAttendance = () => {
       await validateLocationRequirements();
       const location = await fetchLocationOptimized();
       const type = checkedIn ? 'check-out' : 'check-in';
-      const result = await dispatch(
+      await dispatch(
         logAttendance({
           type,
           location,
@@ -312,37 +282,12 @@ export const useAttendance = () => {
         }),
       ).unwrap();
 
-      if (result.attendance) {
-        const checkInDate = result.attendance.checkInTime
-          ? new Date(result.attendance.checkInTime)
-          : null;
-        const checkOutDate = result.attendance.checkOutTime
-          ? new Date(result.attendance.checkOutTime)
-          : null;
-
-        setAttendanceStats(prev => ({
-          ...prev,
-          firstCheckIn: checkInDate
-            ? formatTime(checkInDate)
-            : prev.firstCheckIn,
-          lastCheckOut: checkOutDate
-            ? formatTime(checkOutDate)
-            : prev.lastCheckOut,
-          totalHours:
-            checkInDate && checkOutDate
-              ? calculateTotalHours(checkInDate, checkOutDate)
-              : prev.totalHours,
-          checkInDate,
-          checkOutDate,
-        }));
-      }
-
-      if (!checkedIn) {
+      if (type === 'check-in') {
         setCooldownLeft(10);
       }
 
       toast.show(
-        checkedIn
+        type === 'check-out'
           ? ` Checked out at ${formatTime(new Date())}`
           : ` Checked in at ${formatTime(new Date())}`,
         { type: 'success', placement: 'top', duration: 3000 },
@@ -425,7 +370,6 @@ export const useAttendance = () => {
 
   return {
     scale,
-    currentTime,
     attendanceStats,
     showDropdown,
     setShowDropdown: toggleDropdown,
@@ -434,6 +378,8 @@ export const useAttendance = () => {
     isLoading,
     loadingMessage,
     isFetchingToday,
+    refreshing,
+    onRefresh,
     cooldownLeft,
     checkedIn,
     selectedMode,
@@ -443,6 +389,5 @@ export const useAttendance = () => {
     handleSetWorkMode,
     pressIn,
     pressOut,
-    formatTime,
   };
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, Animated, Pressable, ActivityIndicator } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useResponsive } from '../../../utils/responsive';
@@ -81,4 +81,4 @@ const AttendanceButton: React.FC<Props> = ({
   );
 };
 
-export default AttendanceButton;
+export default memo(AttendanceButton);

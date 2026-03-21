@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useResponsive } from '../../../utils/responsive';
@@ -85,4 +85,4 @@ const AttendanceHeader: React.FC<Props> = ({
   );
 };
 
-export default AttendanceHeader;
+export default memo(AttendanceHeader);

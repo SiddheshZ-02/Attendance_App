@@ -4,8 +4,8 @@ import { API_CONFIG, apiCall } from '../../services/api/apiConfig';
 import { setSessionExpired } from '../auth/authSlice';
 
 type AttendanceStats = {
-  firstCheckIn: string;
-  lastCheckOut: string;
+  firstCheckIn: string | null;
+  lastCheckOut: string | null;
   totalHours: string;
 };
 
@@ -20,8 +20,8 @@ interface AttendanceState {
 const initialState: AttendanceState = {
   checkedIn: false,
   stats: {
-    firstCheckIn: '--:--',
-    lastCheckOut: '--:--',
+    firstCheckIn: null,
+    lastCheckOut: null,
     totalHours: '--:--',
   },
   workMode: null,
@@ -184,6 +184,19 @@ const attendanceSlice = createSlice({
     setStats(state, action: PayloadAction<AttendanceStats>) {
       state.stats = action.payload;
     },
+    updateTotalHours(state) {
+      if (state.checkedIn && state.stats.firstCheckIn) {
+        const checkIn = new Date(state.stats.firstCheckIn);
+        const now = new Date();
+        const diffMs = now.getTime() - checkIn.getTime();
+        if (diffMs > 0) {
+          const totalMinutes = Math.floor(diffMs / (1000 * 60));
+          const h = Math.floor(totalMinutes / 60);
+          const m = totalMinutes % 60;
+          state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
+        }
+      }
+    },
   },
   extraReducers: builder => {
     builder
@@ -193,28 +206,26 @@ const attendanceSlice = createSlice({
       })
       .addCase(fetchTodayAttendance.fulfilled, (state, action) => {
         state.loading = false;
-        if (!action.payload) {
-          return;
-        }
+        if (!action.payload) return;
 
-        state.checkedIn =
-          action.payload.hasCheckedIn && !action.payload.hasCheckedOut;
-
+        state.checkedIn = action.payload.hasCheckedIn && !action.payload.hasCheckedOut;
         state.workMode = action.payload.workMode;
 
         if (action.payload.attendance) {
-          const checkInDate = action.payload.attendance.checkInTime
-            ? new Date(action.payload.attendance.checkInTime)
-            : null;
-          const checkOutDate = action.payload.attendance.checkOutTime
-            ? new Date(action.payload.attendance.checkOutTime)
-            : null;
-
-          state.stats = {
-            firstCheckIn: checkInDate ? checkInDate.toISOString() : '--:--',
-            lastCheckOut: checkOutDate ? checkOutDate.toISOString() : '--:--',
-            totalHours: state.stats.totalHours,
-          };
+          state.stats.firstCheckIn = action.payload.attendance.checkInTime || null;
+          state.stats.lastCheckOut = action.payload.attendance.checkOutTime || null;
+          
+          if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
+            const checkIn = new Date(state.stats.firstCheckIn);
+            const checkOut = new Date(state.stats.lastCheckOut);
+            const diffMs = checkOut.getTime() - checkIn.getTime();
+            if (diffMs > 0) {
+              const totalMinutes = Math.floor(diffMs / (1000 * 60));
+              const h = Math.floor(totalMinutes / 60);
+              const m = totalMinutes % 60;
+              state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
+            }
+          }
         }
       })
       .addCase(fetchTodayAttendance.rejected, (state, action) => {
@@ -224,36 +235,41 @@ const attendanceSlice = createSlice({
       .addCase(logAttendance.pending, state => {
         state.loading = true;
         state.error = null;
+        // Optimistic update
+        state.checkedIn = !state.checkedIn;
       })
       .addCase(logAttendance.fulfilled, (state, action) => {
         state.loading = false;
-        state.checkedIn = !state.checkedIn;
-
+        // state.checkedIn is already toggled in pending
         if (action.payload.attendance) {
-          const checkInDate = action.payload.attendance.checkInTime
-            ? new Date(action.payload.attendance.checkInTime)
-            : null;
-          const checkOutDate = action.payload.attendance.checkOutTime
-            ? new Date(action.payload.attendance.checkOutTime)
-            : null;
-
-          state.stats = {
-            firstCheckIn: checkInDate ? checkInDate.toISOString() : state.stats.firstCheckIn,
-            lastCheckOut: checkOutDate ? checkOutDate.toISOString() : state.stats.lastCheckOut,
-            totalHours: state.stats.totalHours,
-          };
+          state.stats.firstCheckIn = action.payload.attendance.checkInTime || state.stats.firstCheckIn;
+          state.stats.lastCheckOut = action.payload.attendance.checkOutTime || state.stats.lastCheckOut;
+          
+          if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
+            const checkIn = new Date(state.stats.firstCheckIn);
+            const checkOut = new Date(state.stats.lastCheckOut);
+            const diffMs = checkOut.getTime() - checkIn.getTime();
+            if (diffMs > 0) {
+              const totalMinutes = Math.floor(diffMs / (1000 * 60));
+              const h = Math.floor(totalMinutes / 60);
+              const m = totalMinutes % 60;
+              state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
+            }
+          }
         }
       })
       .addCase(logAttendance.rejected, (state, action) => {
         state.loading = false;
+        // Rollback optimistic update
+        state.checkedIn = !state.checkedIn;
         state.error =
           (action.payload && action.payload.message) ||
           action.error.message ||
-          null;
+          'Failed to log attendance';
       });
   },
 });
 
-export const { setWorkMode, setCheckedIn, setStats } = attendanceSlice.actions;
+export const { setWorkMode, setCheckedIn, setStats, updateTotalHours } = attendanceSlice.actions;
 export default attendanceSlice.reducer;
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { useProfile } from './hooks/useProfile';
 import ProfileHeader from './components/ProfileHeader';
 import ProfileForm from './components/ProfileForm';
@@ -11,6 +11,8 @@ const Profile = () => {
     user,
     isLoading,
     isLoggingOut,
+    refreshing,
+    onRefresh,
     showLogoutModal,
     setShowLogoutModal,
     confirmLogout,
@@ -29,7 +31,18 @@ const Profile = () => {
   }
 
   return (
-    <View style={styles.screen}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#0A1F4A']}
+          tintColor="#0A1F4A"
+        />
+      }
+    >
       <ProfileHeader
         onBack={() => navigation.goBack()}
         onLogoutPress={() => setShowLogoutModal(true)}
@@ -46,7 +59,7 @@ const Profile = () => {
         isLoggingOut={isLoggingOut}
         styles={styles}
       />
-    </View>
+    </ScrollView>
   );
 };
 

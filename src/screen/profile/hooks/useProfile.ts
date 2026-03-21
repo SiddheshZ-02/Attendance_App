@@ -11,6 +11,7 @@ export const useProfile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const user = auth.user;
 
@@ -50,10 +51,23 @@ export const useProfile = () => {
     }
   };
 
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await dispatch(checkSession()).unwrap();
+    } catch (error) {
+      console.error('❌ Profile refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return {
     user,
     isLoading,
     isLoggingOut,
+    refreshing,
+    onRefresh,
     showLogoutModal,
     setShowLogoutModal,
     confirmLogout,

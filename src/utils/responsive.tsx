@@ -506,10 +506,10 @@ type StyleFactory<T extends StyleSheet.NamedStyles<T>> = (
  *   // Inside component:
  *   const styles = useStyles();
  */
-export function createThemedStyles<T extends StyleSheet.NamedStyles<T>>(
+export const createThemedStyles = <T extends StyleSheet.NamedStyles<T>>(
   factory: StyleFactory<T>,
-): () => T {
-  return function useStyles(): T {
+): (() => T) => {
+  return () => {
     const { colors } = useAppTheme();
     const responsive = useResponsive();
 
@@ -518,7 +518,7 @@ export function createThemedStyles<T extends StyleSheet.NamedStyles<T>>(
       [colors, responsive],
     );
   };
-}
+};
 
 // ================================================================
 // 📦  USAGE EXAMPLES
