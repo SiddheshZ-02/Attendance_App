@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect } from 'react';
-import { View, Modal, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Modal, Text, TouchableOpacity } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../hooks/reduxHooks';
 import { logout, setSessionExpired } from '../features/auth/authSlice';
 import { navigationRef } from '../navigation/navigationRef';
 import { useToast } from 'react-native-toast-notifications';
-
-const { width } = Dimensions.get('window');
+import { createThemedStyles, useResponsive } from '../utils/responsive';
 
 const SessionExpiredModal = () => {
   const dispatch = useAppDispatch();
+  const styles = useStyles();
   const toast = useToast();
   const { sessionExpired, sessionExpiredMessage } = useAppSelector(
     s => s.auth,
@@ -44,7 +44,7 @@ const SessionExpiredModal = () => {
 
   return (
     <Modal
-      visible={sessionExpired}
+      visible={!!sessionExpired}
       transparent
       animationType="fade"
       statusBarTranslucent
@@ -74,79 +74,82 @@ const SessionExpiredModal = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modal: {
-    width: width * 0.85,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  iconContainer: {
-    marginBottom: 20,
-  },
-  iconBackground: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lockIcon: {
-    width: 20,
-    height: 12,
-    borderWidth: 2,
-    borderColor: '#EF4444',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    borderBottomWidth: 0,
-    marginBottom: -2,
-  },
-  lockBody: {
-    width: 24,
-    height: 18,
-    backgroundColor: '#EF4444',
-    borderRadius: 4,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#4B5563',
-    textAlign: 'center',
-    marginBottom: 28,
-  },
-  button: {
-    width: '100%',
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});
-
 export default SessionExpiredModal;
+
+const useStyles = createThemedStyles((colors, { wp, hp, fp, radius, SCREEN }) => {
+  return {
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: wp(24),
+    },
+    modal: {
+      width: SCREEN.width * 0.85,
+      backgroundColor: '#FFFFFF',
+      borderRadius: radius.xl,
+      padding: wp(32),
+      alignItems: 'center',
+      elevation: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: hp(4) },
+      shadowOpacity: 0.3,
+      shadowRadius: wp(8),
+    },
+    iconContainer: {
+      marginBottom: hp(20),
+    },
+    iconBackground: {
+      width: wp(80),
+      height: wp(80),
+      backgroundColor: '#FEE2E2',
+      borderRadius: wp(40),
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+    },
+    lockIcon: {
+      width: wp(20),
+      height: wp(20),
+      borderRadius: wp(10),
+      borderWidth: wp(3),
+      borderColor: '#EF4444',
+      position: 'absolute',
+      top: wp(20),
+    },
+    lockBody: {
+      width: wp(24),
+      height: wp(20),
+      backgroundColor: '#EF4444',
+      borderRadius: wp(4),
+      marginTop: wp(15),
+    },
+    title: {
+      fontSize: fp(24),
+      fontWeight: 'bold',
+      color: '#111827',
+      marginBottom: hp(12),
+      textAlign: 'center',
+    },
+    message: {
+      fontSize: fp(16),
+      color: '#4B5563',
+      textAlign: 'center',
+      lineHeight: fp(24),
+      marginBottom: hp(32),
+    },
+    button: {
+      width: '100%',
+      backgroundColor: '#111827',
+      paddingVertical: hp(16),
+      borderRadius: radius.lg,
+      alignItems: 'center',
+    },
+    buttonText: {
+      color: '#FFFFFF',
+      fontSize: fp(16),
+      fontWeight: '600',
+    },
+  };
+});

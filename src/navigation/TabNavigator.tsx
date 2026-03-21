@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import Attendance from '../screen/attendance/Attendance';
 import Profile from '../screen/profile/Profile';
+import { createThemedStyles, useResponsive } from '../utils/responsive';
 
 const Tab = createBottomTabNavigator();
-const { width } = Dimensions.get('window');
 
 const getIcon = (name: string) => {
   switch (name) {
@@ -21,6 +21,8 @@ const getIcon = (name: string) => {
 };
 
 const CustomTabBar = ({ state, navigation }: any) => {
+  const { wp, SCREEN } = useResponsive();
+  const styles = useStyles();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const numTabs = state.routes.length;
   
@@ -33,11 +35,11 @@ const CustomTabBar = ({ state, navigation }: any) => {
     }).start();
   }, [state.index, slideAnim]);
 
-  const tabWidth = (width * 0.75 - 40) / numTabs; // Adjust based on container width
+  const tabWidth = (SCREEN.width * 0.75 - wp(40)) / numTabs; // Adjust based on container width
   
   const translateX = slideAnim.interpolate({
     inputRange: [0, numTabs - 1],
-    outputRange: [10, tabWidth * (numTabs - 1) + 10],
+    outputRange: [wp(10), tabWidth * (numTabs - 1) + wp(10)],
   });
 
   return (
@@ -48,7 +50,7 @@ const CustomTabBar = ({ state, navigation }: any) => {
           style={[
             styles.slidingBackground,
             {
-              width: tabWidth - 10,
+              width: tabWidth - wp(10),
               transform: [{ translateX }],
             },
           ]}
@@ -68,8 +70,8 @@ const CustomTabBar = ({ state, navigation }: any) => {
               <View style={styles.iconContainer}>
                 <Icon
                   name={getIcon(route.name)}
-                  size={26}
-                  color={isFocused ? '#1F2937' : '#6B7280'}
+                  size={wp(26)}
+                  color={isFocused ? '#071428' : '#6B7280'}
                 />
               </View>
               {isFocused && (
@@ -101,60 +103,61 @@ const TabNavigator = () => {
 
 export default TabNavigator;
 
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 25,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
+const useStyles = createThemedStyles((colors, { wp, hp, fp, radius, spacing }) => {
+  return {
+    container: {
+      position: 'absolute',
+      bottom: hp(25),
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      paddingHorizontal: wp(20),
+    },
 
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#4B5563',
-    borderRadius: 35,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 12,
-    width: '75%',
-    position: 'relative',
-  },
+    tabBar: {
+      flexDirection: 'row',
+      backgroundColor: '#0A1F4A',
+      borderRadius: radius.xl, // Approximate for 35
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: hp(8) },
+      shadowOpacity: 0.3,
+      shadowRadius: wp(15),
+      elevation: 12,
+      width: '75%',
+      position: 'relative',
+    },
 
-  slidingBackground: {
-    position: 'absolute',
-    height: 50,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 25,
-    top: 10,
-    // left: 5,
-  },
+    slidingBackground: {
+      position: 'absolute',
+      height: hp(50),
+      backgroundColor: '#E5E7EB',
+      borderRadius: radius.lg, // Approximate for 25
+      top: hp(10),
+    },
 
-  tabItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    zIndex: 10,
-    gap: 8,
-  },
+    tabItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: hp(6),
+      zIndex: 10,
+      gap: wp(8),
+    },
 
-  iconContainer: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    iconContainer: {
+      width: wp(40),
+      height: wp(40),
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
+    tabText: {
+      fontSize: fp(13),
+      fontWeight: '600',
+      color: '#071428',
+    },
+  };
 });

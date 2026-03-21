@@ -486,18 +486,21 @@ export function useAdaptiveValue<T>(phoneValue: T, tabletValue: T): T {
 
 type StyleFactory<T extends StyleSheet.NamedStyles<T>> = (
   colors:  ColorPalette,
-  radius:  RadiusScale,
-  spacing: SpacingScale,
+  responsive: ResponsiveReturn,
 ) => T;
 
 /**
  * createThemedStyles
- * Like StyleSheet.create() but receives color/radius/spacing tokens.
+ * Like StyleSheet.create() but receives color and responsive tokens.
  * Memoizes the stylesheet — no re-creation unless screen size changes.
  *
  * Usage:
- *   const useStyles = createThemedStyles((colors, radius, spacing) => ({
- *     card: { backgroundColor: colors.surface, borderRadius: radius.md },
+ *   const useStyles = createThemedStyles((colors, { radius, spacing, wp }) => ({
+ *     card: { 
+ *       backgroundColor: colors.surface, 
+ *       borderRadius: radius.md,
+ *       width: wp(300)
+ *     },
  *   }));
  *
  *   // Inside component:
@@ -507,23 +510,12 @@ export function createThemedStyles<T extends StyleSheet.NamedStyles<T>>(
   factory: StyleFactory<T>,
 ): () => T {
   return function useStyles(): T {
-    const { colors }          = useAppTheme();
-    const { radius, spacing } = useResponsive();
+    const { colors } = useAppTheme();
+    const responsive = useResponsive();
 
-    // ✅ FIX #2 + #3 — Previous code used `prevColorsRef.current` as a
-    // useMemo dependency. React does NOT track ref.current mutations —
-    // the dep was silently broken and would never trigger a re-run.
-    // Also removed `useStableRef` helper entirely (FIX #3) since it only
-    // existed to support this broken pattern.
-    //
-    // Correct approach: APP_THEME.colors is a module-level constant —
-    // its reference never changes, so it is safe to omit from deps.
-    // Only `radius` and `spacing` change (on screen resize), so those
-    // are the only real dependencies here.
     return useMemo(
-      () => StyleSheet.create(factory(colors, radius, spacing)),
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [radius, spacing],
+      () => StyleSheet.create(factory(colors, responsive)),
+      [colors, responsive],
     );
   };
 }

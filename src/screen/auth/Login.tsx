@@ -11,6 +11,7 @@ import {
   Easing,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -277,232 +278,243 @@ const Login = () => {
     }
   };
 
-  // ── Splash screen while checking saved session ─────────────────
-  // We handle it in the main return with animations now.
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.fullFlex}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-        <View style={styles.container}>
-          {/* Animated Logo */}
-          <Animated.View
-            style={[
-              styles.logoWrapper,
-              {
-                transform: [{ translateY: logoY }, { scale: logoScale }],
-              },
-            ]}
-          >
-            <View style={styles.logoShadow}>
-              <EMSLogo width={wp(100)} height={wp(100)} />
-            </View>
-            <Text style={styles.splashText}>Employee Managment System</Text>
-          </Animated.View>
-
-          {/* Animated Login Form */}
-          {showForm && (
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+          <View style={styles.container}>
+            {/* Animated Logo */}
             <Animated.View
               style={[
-                styles.formContainer,
+                styles.logoWrapper,
                 {
-                  opacity: formOpacity,
-                  transform: [{ translateY: formY }],
+                  transform: [{ translateY: logoY }, { scale: logoScale }],
                 },
               ]}
             >
-              <View style={[styles.form, containerMaxWidth ? { maxWidth: containerMaxWidth } : null]}>
-                <Text style={styles.heading}>Login</Text>
-
-                {/* Email */}
-                <View style={styles.field}>
-                  <TextInput
-                    placeholder="Email"
-                    placeholderTextColor="#aaa"
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                  />
-                  <Icon name="user" size={wp(20)} color="#d2d0d0ff" />
-                </View>
-
-                {/* Password */}
-                <View style={styles.field}>
-                  <TextInput
-                    placeholder="Password"
-                    placeholderTextColor="#aaa"
-                    secureTextEntry={!isPasswordVisible}
-                    style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    editable={!isLoading}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                    disabled={isLoading}
-                  >
-                    <Icon1
-                      name={isPasswordVisible ? 'eye' : 'eye-off'}
-                      size={wp(20)}
-                      color="#d2d0d0ff"
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Login Button */}
-                <View style={styles.btnRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.button,
-                      (isLoading || isSubmitting) && styles.buttonDisabled,
-                    ]}
-                    onPress={handleLogin}
-                    disabled={isLoading || isSubmitting}
-                  >
-                    {isLoading || isSubmitting ? (
-                      <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="small" color="#fff" />
-                        <Text style={[styles.btnText, styles.btnTextSpacing]}>
-                          {loadingMessage}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.btnText}>Login</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                {/* Forgot Password */}
-                <TouchableOpacity
-                  style={styles.forgotBtn}
-                  disabled={isLoading}
-                ></TouchableOpacity>
+              <View style={styles.logoShadow}>
+                <EMSLogo width={wp(100)} height={wp(100)} />
               </View>
+              <Text style={styles.splashText}>Employee Managment System</Text>
             </Animated.View>
-          )}
-        </View>
-      </TouchableWithoutFeedback>
+
+            {/* Animated Login Form */}
+            {showForm && (
+              <Animated.View
+                style={[
+                  styles.formContainer,
+                  {
+                    opacity: formOpacity,
+                    transform: [{ translateY: formY }],
+                  },
+                ]}
+              >
+                <View style={[styles.form, containerMaxWidth ? { maxWidth: containerMaxWidth } : null]}>
+                  <Text style={styles.heading}>Login</Text>
+
+                  {/* Email */}
+                  <View style={styles.field}>
+                    <TextInput
+                      placeholder="Email"
+                      placeholderTextColor="#aaa"
+                      style={styles.input}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!isLoading}
+                    />
+                    <Icon name="user" size={wp(20)} color="#d2d0d0ff" />
+                  </View>
+
+                  {/* Password */}
+                  <View style={styles.field}>
+                    <TextInput
+                      placeholder="Password"
+                      placeholderTextColor="#aaa"
+                      secureTextEntry={!isPasswordVisible}
+                      style={styles.input}
+                      value={password}
+                      onChangeText={setPassword}
+                      editable={!isLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                      disabled={isLoading}
+                    >
+                      <Icon1
+                        name={isPasswordVisible ? 'eye' : 'eye-off'}
+                        size={wp(20)}
+                        color="#d2d0d0ff"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Login Button */}
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.button,
+                        (isLoading || isSubmitting) && styles.buttonDisabled,
+                      ]}
+                      onPress={handleLogin}
+                      disabled={isLoading || isSubmitting}
+                    >
+                      {isLoading || isSubmitting ? (
+                        <View style={styles.loadingContainer}>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={[styles.btnText, styles.btnTextSpacing]}>
+                            {loadingMessage}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.btnText}>Login</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Forgot Password */}
+                  <TouchableOpacity
+                    style={styles.forgotBtn}
+                    disabled={isLoading}
+                  ></TouchableOpacity>
+                </View>
+              </Animated.View>
+            )}
+          </View>
+        </TouchableWithoutFeedback>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 export default Login;
 
-const useStyles = createThemedStyles((colors, radius, spacing) => ({
-  fullFlex: { flex: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  logoWrapper: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  formContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  form: {
-    width: '85%',
-    backgroundColor: '#d2d0d0ff',
-    borderRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-  },
-  heading: {
-    textAlign: 'center',
-    marginVertical: spacing.lg,
-    color: '#222',
-    fontSize: 30,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F4F6F8',
-    borderRadius: radius.full,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    elevation: 5,
-    paddingRight: spacing.xl,
-  },
-  input: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    color: '#111',
-    fontSize: 15,
-  },
-  btnRow: {
-    justifyContent: 'center',
-    marginTop: spacing.xl,
-  },
-  button: {
-    backgroundColor: '#252525',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.sm,
-    marginHorizontal: spacing.xxs,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    backgroundColor: '#666',
-    opacity: 0.7,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  btnText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: '500',
-    fontSize: 16,
-  },
-  btnTextSpacing: {
-    marginLeft: spacing.sm,
-  },
-  forgotBtn: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.xs,
-  },
-  splashText: {
-    fontSize: 20,
-    fontWeight: '700',
-    paddingTop: spacing.sm,
-    maxWidth: '60%',
-    textAlign: 'center',
-    color: '#333',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  logoShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
-  },
-}));
+const useStyles = createThemedStyles((colors, { radius, spacing, hp, wp, fp }) => {
+  return {
+    fullFlex: { flex: 1 },
+    scrollContainer: {
+      flexGrow: 1,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    logoWrapper: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    formContainer: {
+      flex: 1,
+      alignItems: 'center',
+      paddingTop: hp(250), // Scaled to start below animated logo
+    },
+    form: {
+      width: '85%',
+      backgroundColor: '#d2d0d0ff',
+      borderRadius: radius.xl,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+      paddingTop: spacing.xs,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: hp(8) },
+      shadowOpacity: 0.08,
+      shadowRadius: wp(10),
+      elevation: 5,
+    },
+    heading: {
+      textAlign: 'center',
+      marginVertical: spacing.lg,
+      color: '#222',
+      fontSize: fp(30),
+      fontWeight: '600',
+      textShadowColor: 'rgba(0, 0, 0, 0.1)',
+      textShadowOffset: { width: wp(1), height: hp(1) },
+      textShadowRadius: wp(2),
+    },
+    field: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#F4F6F8',
+      borderRadius: radius.full,
+      padding: spacing.sm,
+      marginBottom: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      elevation: 5,
+      paddingRight: spacing.xl,
+    },
+    input: {
+      flex: 1,
+      marginLeft: spacing.sm,
+      color: '#111',
+      fontSize: fp(15),
+    },
+    btnRow: {
+      justifyContent: 'center',
+      marginTop: spacing.xl,
+    },
+    button: {
+      backgroundColor: '#252525',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.sm,
+      marginHorizontal: spacing.xxs,
+      alignItems: 'center',
+    },
+    buttonDisabled: {
+      backgroundColor: '#666',
+      opacity: 0.7,
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    btnText: {
+      color: '#fff',
+      textAlign: 'center',
+      fontWeight: '500',
+      fontSize: fp(16),
+    },
+    btnTextSpacing: {
+      marginLeft: spacing.sm,
+    },
+    forgotBtn: {
+      marginTop: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.xs,
+    },
+    splashText: {
+      fontSize: fp(20),
+      fontWeight: '700',
+      paddingTop: spacing.sm,
+      maxWidth: '60%',
+      textAlign: 'center',
+      color: '#333',
+      textShadowColor: 'rgba(0, 0, 0, 0.2)',
+      textShadowOffset: { width: wp(1), height: hp(1) },
+      textShadowRadius: wp(3),
+    },
+    logoShadow: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: hp(6) },
+      shadowOpacity: 0.3,
+      shadowRadius: wp(4.65),
+      elevation: 8,
+    },
+  };
+});
+
