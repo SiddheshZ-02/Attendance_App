@@ -12,6 +12,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -285,6 +286,7 @@ const Login = () => {
       style={styles.fullFlex}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
+      <StatusBar backgroundColor="#FFF" />
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         bounces={false}
