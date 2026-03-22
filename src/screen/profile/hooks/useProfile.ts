@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '../../../hooks/reduxHooks';
 import { checkSession, logout } from '../../../features/auth/authSlice';
+import { resetAttendance } from '../../../features/attendance/attendanceSlice';
 
 export const useProfile = () => {
   const navigation = useNavigation();
@@ -42,8 +43,10 @@ export const useProfile = () => {
     try {
       setIsLoggingOut(true);
       await dispatch(logout()).unwrap();
+      dispatch(resetAttendance());
       navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
     } catch {
+      dispatch(resetAttendance());
       navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
     } finally {
       setIsLoggingOut(false);

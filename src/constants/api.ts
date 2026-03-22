@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   ATTENDANCE: {
     CHECK_IN: '/api/attendance/checkin',
     CHECK_OUT: '/api/attendance/checkout',
-    TODAY: '/api/attendance/today'
+    TODAY: '/api/attendance/today',
+    OFFICE_LOCATION: '/api/attendance/office-location'
   }
 };

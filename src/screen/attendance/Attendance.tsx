@@ -28,7 +28,11 @@ const Attendance = () => {
     onRefresh,
     cooldownLeft,
     checkedIn,
+    hasCheckedOut,
     selectedMode,
+    distance,
+    nearestOffice,
+    locationAccuracy,
     auth,
     handlePress,
     handleEnableLocation,
@@ -93,8 +97,30 @@ const Attendance = () => {
       ) : (
         <>
           {selectedModeData && (
-            <Text style={[styles.dropdownItemText, styles.dropdownItemTextSelectedName]}>
-              {selectedModeData.label}
+            <View style={styles.selectedModeDisplay}>
+              <Text style={[styles.dropdownItemText, styles.dropdownItemTextSelectedName]}>
+                {selectedModeData.label}
+                {!hasCheckedOut && (selectedMode === 'Office' || (selectedMode === 'WFH' && checkedIn)) && (
+                  distance !== null ? (
+                    <Text style={[
+                      styles.distanceText,
+                      { color: distance <= 100 ? '#16A34A' : '#DC2626' }
+                    ]}>
+                      {' '}({distance}m)
+                    </Text>
+                  ) : (
+                    <Text style={[styles.distanceText, { color: 'grey' }]}>
+                      {' '}(...)
+                    </Text>
+                  )
+                )}
+              </Text>
+            </View>
+          )}
+
+          {locationAccuracy && locationAccuracy > 50 && (
+            <Text style={styles.accuracyWarning}>
+              ⚠️ Low GPS Accuracy ({Math.round(locationAccuracy)}m)
             </Text>
           )}
 
@@ -178,7 +204,30 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
     },
     dropdownItemSelected: { backgroundColor: '#E8F5E9' },
     dropdownItemText: { fontSize: fp(14), color: '#333', textAlign: 'center' },
-    dropdownItemTextSelectedName: { color: colors.success, fontWeight: '500', paddingTop: hp(28) },
+    dropdownItemTextSelected: { color: "#16A34A", fontWeight: '700' },
+    dropdownItemTextSelectedName: {
+      color: "#16A34A",
+      fontWeight: '800',
+      fontSize: fp(16),
+      textAlign: 'center',
+    },
+    selectedModeDisplay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: hp(20),
+    },
+    distanceText: {
+      fontSize: fp(16),
+      fontWeight: '700',
+    },
+    accuracyWarning: {
+      color: '#F59E0B',
+      fontSize: fp(12),
+      textAlign: 'center',
+      marginTop: hp(4),
+      fontWeight: '600',
+    },
     timeContainer: {
       height: '20%',
       justifyContent: 'center',

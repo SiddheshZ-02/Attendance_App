@@ -9,22 +9,39 @@ type AttendanceStats = {
   totalHours: string;
 };
 
+type OfficeLocation = {
+  id: string;
+  name: string;
+  address: string;
+  location: {
+    type: string;
+    coordinates: [number, number]; // [lng, lat]
+  };
+  radius: number;
+};
+
 interface AttendanceState {
   checkedIn: boolean;
+  hasCheckedOut: boolean;
   stats: AttendanceStats;
   workMode: string | null;
+  checkInLocation: [number, number] | null; // [lng, lat]
+  officeLocations: OfficeLocation[];
   loading: boolean;
   error: string | null;
 }
 
 const initialState: AttendanceState = {
   checkedIn: false,
+  hasCheckedOut: false,
   stats: {
     firstCheckIn: null,
     lastCheckOut: null,
     totalHours: '--:--',
   },
   workMode: null,
+  checkInLocation: null,
+  officeLocations: [],
   loading: false,
   error: null,
 };
@@ -36,6 +53,9 @@ type TodayAttendancePayload = {
   attendance: {
     checkInTime: string | null;
     checkOutTime: string | null;
+    checkInLocation?: {
+      coordinates: [number, number];
+    };
   } | null;
 };
 
@@ -60,6 +80,7 @@ export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | nu
           ? {
               checkInTime: data.attendance.checkInTime || null,
               checkOutTime: data.attendance.checkOutTime || null,
+              checkInLocation: data.attendance.checkInLocation || null,
             }
           : null,
       };
@@ -77,6 +98,27 @@ export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | nu
   },
 );
 
+export const fetchOfficeLocations = createAsyncThunk<OfficeLocation[] | null>(
+  'attendance/fetchOfficeLocations',
+  async (_, thunkAPI) => {
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token) return null;
+    try {
+      const data: any = await apiCall(
+        API_CONFIG.ENDPOINTS.ATTENDANCE.OFFICE_LOCATION,
+        'GET',
+        null,
+        token,
+      );
+      if (!data?.success) return null;
+      return data.officeLocations;
+    } catch (error: any) {
+      console.error('fetchOfficeLocations error:', error);
+      return null;
+    }
+  },
+);
+
 type LogAttendanceArgs = {
   type: 'check-in' | 'check-out';
   location: { lat: number; lng: number };
@@ -87,6 +129,9 @@ type LogAttendanceResult = {
   attendance: {
     checkInTime: string | null;
     checkOutTime: string | null;
+    checkInLocation?: {
+      coordinates: [number, number];
+    };
   } | null;
 };
 
@@ -151,6 +196,7 @@ export const logAttendance = createAsyncThunk<
         ? {
             checkInTime: data.attendance.checkInTime || null,
             checkOutTime: data.attendance.checkOutTime || null,
+            checkInLocation: data.attendance.checkInLocation || null,
           }
         : null,
     };
@@ -197,6 +243,9 @@ const attendanceSlice = createSlice({
         }
       }
     },
+    resetAttendance(state) {
+      return initialState;
+    },
   },
   extraReducers: builder => {
     builder
@@ -209,11 +258,13 @@ const attendanceSlice = createSlice({
         if (!action.payload) return;
 
         state.checkedIn = action.payload.hasCheckedIn && !action.payload.hasCheckedOut;
+        state.hasCheckedOut = action.payload.hasCheckedOut;
         state.workMode = action.payload.workMode;
 
         if (action.payload.attendance) {
           state.stats.firstCheckIn = action.payload.attendance.checkInTime || null;
           state.stats.lastCheckOut = action.payload.attendance.checkOutTime || null;
+          state.checkInLocation = action.payload.attendance.checkInLocation?.coordinates || null;
           
           if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
             const checkIn = new Date(state.stats.firstCheckIn);
@@ -240,10 +291,20 @@ const attendanceSlice = createSlice({
       })
       .addCase(logAttendance.fulfilled, (state, action) => {
         state.loading = false;
-        // state.checkedIn is already toggled in pending
+        // Check if this was a check-out operation
+        const isCheckout = action.meta.arg.type === 'check-out';
+        if (isCheckout) {
+          state.checkedIn = false;
+          state.hasCheckedOut = true;
+        } else {
+          state.checkedIn = true;
+          state.hasCheckedOut = false;
+        }
+        
         if (action.payload.attendance) {
           state.stats.firstCheckIn = action.payload.attendance.checkInTime || state.stats.firstCheckIn;
           state.stats.lastCheckOut = action.payload.attendance.checkOutTime || state.stats.lastCheckOut;
+          state.checkInLocation = action.payload.attendance.checkInLocation?.coordinates || state.checkInLocation;
           
           if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
             const checkIn = new Date(state.stats.firstCheckIn);
@@ -266,10 +327,15 @@ const attendanceSlice = createSlice({
           (action.payload && action.payload.message) ||
           action.error.message ||
           'Failed to log attendance';
+      })
+      .addCase(fetchOfficeLocations.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.officeLocations = action.payload;
+        }
       });
   },
 });
 
-export const { setWorkMode, setCheckedIn, setStats, updateTotalHours } = attendanceSlice.actions;
+export const { setWorkMode, setCheckedIn, setStats, updateTotalHours, resetAttendance } = attendanceSlice.actions;
 export default attendanceSlice.reducer;
 

@@ -9,7 +9,9 @@ import {
   logAttendance,
   setWorkMode,
   updateTotalHours,
+  fetchOfficeLocations,
 } from '../../../features/attendance/attendanceSlice';
+import { calculateDistance } from '../../../utils/geolocation';
 
 export const useAttendance = () => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -20,8 +22,12 @@ export const useAttendance = () => {
   const [isFetchingToday, setIsFetchingToday] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
+  const [distance, setDistance] = useState<number | null>(null);
+  const [nearestOffice, setNearestOffice] = useState<string | null>(null);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
   const isProcessing = useRef(false);
+  const distanceWatchId = useRef<number | null>(null);
   const lastKnownLocation = useRef<{
     lat: number;
     lng: number;
@@ -34,8 +40,131 @@ export const useAttendance = () => {
   const attendance = useAppSelector(state => state.attendance);
 
   const checkedIn = attendance.checkedIn;
+  const hasCheckedOut = attendance.hasCheckedOut;
   const selectedMode = attendance.workMode;
   const attendanceStats = attendance.stats;
+  const officeLocations = attendance.officeLocations;
+  const checkInLocation = attendance.checkInLocation;
+
+  const hasLocationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      return await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+    }
+    const result = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    return result === RESULTS.GRANTED;
+  }, []);
+
+  const ensureLocationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+      if (granted) return true;
+      const req = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+      return req === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    const status = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    if (status === RESULTS.GRANTED) return true;
+    const reqStatus = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+    return reqStatus === RESULTS.GRANTED;
+  }, []);
+
+  const isGPSEnabled = useCallback((): Promise<boolean> =>
+    new Promise(resolve => {
+      Geolocation.getCurrentPosition(
+        () => resolve(true),
+        error => resolve(error.code !== 2),
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
+      );
+    }), []);
+
+  const updateDistance = useCallback((lat: number, lng: number) => {
+    if (selectedMode === 'Office') {
+      if (officeLocations && officeLocations.length > 0) {
+        let minDistance = Infinity;
+        let closestOffice = '';
+
+        officeLocations.forEach(office => {
+          const d = calculateDistance(
+            lat,
+            lng,
+            office.location.coordinates[1],
+            office.location.coordinates[0],
+          );
+          if (d < minDistance) {
+            minDistance = d;
+            closestOffice = office.name;
+          }
+        });
+
+        setDistance(Math.round(minDistance));
+        setNearestOffice(closestOffice);
+      }
+    } else if (selectedMode === 'WFH' && checkedIn && checkInLocation) {
+      const d = calculateDistance(
+        lat,
+        lng,
+        checkInLocation[1],
+        checkInLocation[0],
+      );
+      setDistance(Math.round(d));
+      setNearestOffice('Check-in Location');
+    }
+  }, [officeLocations, selectedMode, checkedIn, checkInLocation]);
+
+  const startDistanceTracking = useCallback(async () => {
+    const hasPermission = await hasLocationPermission();
+    const gpsEnabled = await isGPSEnabled();
+    
+    if (!hasPermission || !gpsEnabled) {
+      setShowLocationModal(true);
+      return;
+    }
+
+    if (distanceWatchId.current !== null) {
+      Geolocation.clearWatch(distanceWatchId.current);
+      distanceWatchId.current = null;
+    }
+
+    Geolocation.getCurrentPosition(
+      position => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setLocationAccuracy(accuracy);
+        updateDistance(latitude, longitude);
+      },
+      error => console.log('⚠️ Initial distance check error:', error.message),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+
+    distanceWatchId.current = Geolocation.watchPosition(
+      position => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setLocationAccuracy(accuracy);
+        updateDistance(latitude, longitude);
+      },
+      error => console.log('⚠️ Distance tracking error:', error.message),
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+        distanceFilter: 5,
+      },
+    );
+  }, [hasLocationPermission, isGPSEnabled, updateDistance]);
+
+  const stopDistanceTracking = useCallback(() => {
+    if (distanceWatchId.current !== null) {
+      Geolocation.clearWatch(distanceWatchId.current);
+      distanceWatchId.current = null;
+    }
+    setDistance(null);
+    setNearestOffice(null);
+    setLocationAccuracy(null);
+  }, []);
 
   const formatTime = useCallback((date: Date) => {
     const hours = date.getHours();
@@ -49,7 +178,10 @@ export const useAttendance = () => {
   const loadTodayAttendance = useCallback(async () => {
     try {
       setIsFetchingToday(true);
-      await dispatch(fetchTodayAttendance()).unwrap();
+      await Promise.all([
+        dispatch(fetchTodayAttendance()).unwrap(),
+        dispatch(fetchOfficeLocations()).unwrap(),
+      ]);
     } catch (error) {
       console.error('❌ Load today attendance error:', error);
     } finally {
@@ -60,13 +192,31 @@ export const useAttendance = () => {
   const onRefresh = useCallback(async () => {
     try {
       setRefreshing(true);
-      await dispatch(fetchTodayAttendance()).unwrap();
+      await Promise.all([
+        dispatch(fetchTodayAttendance()).unwrap(),
+        dispatch(fetchOfficeLocations()).unwrap(),
+      ]);
     } catch (error) {
       console.error('❌ Refresh today attendance error:', error);
     } finally {
       setRefreshing(false);
     }
   }, [dispatch]);
+
+  useEffect(() => {
+    // Disable distance tracking if user has checked out
+    if (hasCheckedOut) {
+      stopDistanceTracking();
+      return;
+    }
+
+    if (selectedMode === 'Office' || (selectedMode === 'WFH' && checkedIn)) {
+      startDistanceTracking();
+    } else {
+      stopDistanceTracking();
+    }
+    return () => stopDistanceTracking();
+  }, [selectedMode, checkedIn, hasCheckedOut, startDistanceTracking, stopDistanceTracking]);
 
   useEffect(() => {
     loadTodayAttendance();
@@ -90,42 +240,6 @@ export const useAttendance = () => {
       },
     );
   }, []);
-
-  const hasLocationPermission = async (): Promise<boolean> => {
-    if (Platform.OS === 'android') {
-      return await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-    }
-    const result = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-    return result === RESULTS.GRANTED;
-  };
-
-  const ensureLocationPermission = async (): Promise<boolean> => {
-    if (Platform.OS === 'android') {
-      const granted = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-      if (granted) return true;
-      const req = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-      return req === PermissionsAndroid.RESULTS.GRANTED;
-    }
-    const status = await check(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-    if (status === RESULTS.GRANTED) return true;
-    const reqStatus = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-    return reqStatus === RESULTS.GRANTED;
-  };
-
-  const isGPSEnabled = (): Promise<boolean> =>
-    new Promise(resolve => {
-      Geolocation.getCurrentPosition(
-        () => resolve(true),
-        error => resolve(error.code !== 2),
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
-      );
-    });
 
   const checkGPSStatus = useCallback(async () => {
     try {
@@ -382,7 +496,11 @@ export const useAttendance = () => {
     onRefresh,
     cooldownLeft,
     checkedIn,
+    hasCheckedOut,
     selectedMode,
+    distance,
+    nearestOffice,
+    locationAccuracy,
     auth,
     handlePress,
     handleEnableLocation,
