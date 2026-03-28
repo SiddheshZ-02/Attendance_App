@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 import { API_CONFIG, apiCall } from '../../services/api/apiConfig';
 
 export interface User {
@@ -96,9 +97,15 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
           position: data.data.position || '',
         };
 
+        await Keychain.setGenericPassword(
+          'auth_tokens',
+          JSON.stringify({ 
+            token: data.data.token, 
+            refreshToken: data.data.refreshToken || '' 
+          })
+        );
+
         await AsyncStorage.multiSet([
-          ['authToken', data.data.token],
-          ['refreshToken', data.data.refreshToken || ''],
           ['userId', data.data._id],
           ['userName', data.data.name || ''],
           ['userEmail', data.data.email || ''],
@@ -138,7 +145,12 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
   'auth/checkSession',
   async () => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      const credentials = await Keychain.getGenericPassword();
+      if (!credentials) {
+        return null;
+      }
+      
+      const { token } = JSON.parse(credentials.password);
       if (!token) {
         return null;
       }
@@ -170,7 +182,8 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
           ['department', user.department || ''],
         ]);
 
-        const updatedToken = (await AsyncStorage.getItem('authToken')) || token;
+        const updatedCredentials = await Keychain.getGenericPassword();
+        const updatedToken = updatedCredentials ? JSON.parse(updatedCredentials.password).token : token;
         return { token: updatedToken, user };
       }
 
@@ -183,7 +196,8 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
 
 export const logout = createAsyncThunk('auth/logout', async () => {
   try {
-    const token = await AsyncStorage.getItem('authToken');
+    const credentials = await Keychain.getGenericPassword();
+    const token = credentials ? JSON.parse(credentials.password).token : null;
 
     if (token) {
       try {
@@ -192,9 +206,8 @@ export const logout = createAsyncThunk('auth/logout', async () => {
       }
     }
 
+    await Keychain.resetGenericPassword();
     await AsyncStorage.multiRemove([
-      'authToken',
-      'refreshToken',
       'userId',
       'userName',
       'userEmail',

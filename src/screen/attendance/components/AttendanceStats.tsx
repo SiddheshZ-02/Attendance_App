@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { View, Text } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useResponsive } from '../../../utils/responsive';
+import { formatTime } from '../../../utils/time';
 
 interface Props {
   stats: {
@@ -14,17 +15,6 @@ interface Props {
 
 const AttendanceStats: React.FC<Props> = ({ stats, styles }) => {
   const { wp } = useResponsive();
-
-  const formatTime = (isoString: string | null) => {
-    if (!isoString) return '--:--';
-    const date = new Date(isoString);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const h = hours % 12 || 12;
-    const m = minutes < 10 ? `0${minutes}` : minutes;
-    return `${h}:${m} ${ampm}`;
-  };
 
   return (
     <View style={styles.stats}>
@@ -56,3 +46,4 @@ const AttendanceStats: React.FC<Props> = ({ stats, styles }) => {
 };
 
 export default memo(AttendanceStats);
+

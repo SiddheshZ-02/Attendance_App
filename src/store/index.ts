@@ -7,9 +7,8 @@ export const store = configureStore({
     auth: authReducer,
     attendance: attendanceReducer,
   },
-  devTools: true,
+  devTools: __DEV__, // Disabled in production — prevents state inspection via Redux DevTools
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
-

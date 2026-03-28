@@ -1,6 +1,13 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Animated, Platform, PermissionsAndroid, Linking, AppState } from 'react-native';
+import {
+  Animated,
+  Platform,
+  PermissionsAndroid,
+  Linking,
+  AppState,
+} from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { useToast } from 'react-native-toast-notifications';
 import { useAppDispatch, useAppSelector } from '../../../hooks/reduxHooks';
@@ -12,6 +19,7 @@ import {
   fetchOfficeLocations,
 } from '../../../features/attendance/attendanceSlice';
 import { calculateDistance } from '../../../utils/geolocation';
+import { formatTime } from '../../../utils/time';
 
 export const useAttendance = () => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -27,13 +35,13 @@ export const useAttendance = () => {
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
   const isProcessing = useRef(false);
-  const distanceWatchId = useRef<number | null>(null);
+  // Single unified GPS watcher — replaces both distanceWatchId & gpsWarmupWatchId
+  const gpsWatchId = useRef<number | null>(null);
   const lastKnownLocation = useRef<{
     lat: number;
     lng: number;
     timestamp: number;
   } | null>(null);
-  const gpsWarmupWatchId = useRef<number | null>(null);
   const toast = useToast();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(state => state.auth);
@@ -73,117 +81,153 @@ export const useAttendance = () => {
     return reqStatus === RESULTS.GRANTED;
   }, []);
 
-  const isGPSEnabled = useCallback((): Promise<boolean> =>
-    new Promise(resolve => {
-      Geolocation.getCurrentPosition(
-        () => resolve(true),
-        error => resolve(error.code !== 2),
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
-      );
-    }), []);
+  const isGPSEnabled = useCallback(
+    (): Promise<boolean> =>
+      new Promise(resolve => {
+        Geolocation.getCurrentPosition(
+          () => resolve(true),
+          error => resolve(error.code !== 2),
+          { enableHighAccuracy: false, timeout: 3000, maximumAge: 10000 },
+        );
+      }),
+    [],
+  );
 
-  const updateDistance = useCallback((lat: number, lng: number) => {
-    if (selectedMode === 'Office') {
-      if (officeLocations && officeLocations.length > 0) {
-        let minDistance = Infinity;
-        let closestOffice = '';
+  const updateDistance = useCallback(
+    (lat: number, lng: number) => {
+      if (selectedMode === 'Office') {
+        if (officeLocations && officeLocations.length > 0) {
+          let minDistance = Infinity;
+          let closestOffice = '';
 
-        officeLocations.forEach(office => {
-          const d = calculateDistance(
-            lat,
-            lng,
-            office.location.coordinates[1],
-            office.location.coordinates[0],
-          );
-          if (d < minDistance) {
-            minDistance = d;
-            closestOffice = office.name;
-          }
-        });
+          officeLocations.forEach(office => {
+            const d = calculateDistance(
+              lat,
+              lng,
+              office.location.coordinates[1],
+              office.location.coordinates[0],
+            );
+            if (d < minDistance) {
+              minDistance = d;
+              closestOffice = office.name;
+            }
+          });
 
-        setDistance(Math.round(minDistance));
-        setNearestOffice(closestOffice);
+          setDistance(Math.round(minDistance));
+          setNearestOffice(closestOffice);
+        }
+      } else if (selectedMode === 'WFH' && checkedIn && checkInLocation) {
+        const d = calculateDistance(
+          lat,
+          lng,
+          checkInLocation[1],
+          checkInLocation[0],
+        );
+        setDistance(Math.round(d));
+        setNearestOffice('Check-in Location');
       }
-    } else if (selectedMode === 'WFH' && checkedIn && checkInLocation) {
-      const d = calculateDistance(
-        lat,
-        lng,
-        checkInLocation[1],
-        checkInLocation[0],
-      );
-      setDistance(Math.round(d));
-      setNearestOffice('Check-in Location');
-    }
-  }, [officeLocations, selectedMode, checkedIn, checkInLocation]);
+    },
+    [officeLocations, selectedMode, checkedIn, checkInLocation],
+  );
 
+  // ─── Unified GPS watcher ──────────────────────────────────────────────────
+  // A single watchPosition that serves BOTH the warmup cache (lastKnownLocation)
+  // AND the live distance display. This saves battery vs running two watchers.
   const startDistanceTracking = useCallback(async () => {
     const hasPermission = await hasLocationPermission();
     const gpsEnabled = await isGPSEnabled();
-    
+
     if (!hasPermission || !gpsEnabled) {
       setShowLocationModal(true);
       return;
     }
 
-    if (distanceWatchId.current !== null) {
-      Geolocation.clearWatch(distanceWatchId.current);
-      distanceWatchId.current = null;
+    // Clear any existing watcher before starting a new one
+    if (gpsWatchId.current !== null) {
+      Geolocation.clearWatch(gpsWatchId.current);
+      gpsWatchId.current = null;
     }
 
+    // Immediately get the best available position for instant feedback
     Geolocation.getCurrentPosition(
       position => {
         const { latitude, longitude, accuracy } = position.coords;
         setLocationAccuracy(accuracy);
         updateDistance(latitude, longitude);
+        lastKnownLocation.current = {
+          lat: latitude,
+          lng: longitude,
+          timestamp: Date.now(),
+        };
       },
-      error => console.log('⚠️ Initial distance check error:', error.message),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      () => {},
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
 
-    distanceWatchId.current = Geolocation.watchPosition(
+    // Start a single unified watcher — low drain, high accuracy on movement
+    gpsWatchId.current = Geolocation.watchPosition(
       position => {
         const { latitude, longitude, accuracy } = position.coords;
         setLocationAccuracy(accuracy);
         updateDistance(latitude, longitude);
+        lastKnownLocation.current = {
+          lat: latitude,
+          lng: longitude,
+          timestamp: Date.now(),
+        };
       },
-      error => console.log('⚠️ Distance tracking error:', error.message),
+      () => {},
       {
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 5000,
-        distanceFilter: 5,
+        distanceFilter: 5, // only callback if user moved more than 5 meters
       },
     );
   }, [hasLocationPermission, isGPSEnabled, updateDistance]);
 
   const stopDistanceTracking = useCallback(() => {
-    if (distanceWatchId.current !== null) {
-      Geolocation.clearWatch(distanceWatchId.current);
-      distanceWatchId.current = null;
+    if (gpsWatchId.current !== null) {
+      Geolocation.clearWatch(gpsWatchId.current);
+      gpsWatchId.current = null;
     }
     setDistance(null);
     setNearestOffice(null);
     setLocationAccuracy(null);
   }, []);
 
-  const formatTime = useCallback((date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const h = hours % 12 || 12;
-    const m = minutes < 10 ? `0${minutes}` : minutes;
-    return `${h}:${m} ${ampm}`;
-  }, []);
+  // Remove the duplicate inline formatTime — now imported from utils/time
+  // (kept as a comment for traceability)
 
+  // ─── Smart office locations fetch with 24h cache ─────────────────────────
+  // Avoid hitting the network every time the app opens for near-static data.
   const loadTodayAttendance = useCallback(async () => {
     try {
       setIsFetchingToday(true);
-      await Promise.all([
-        dispatch(fetchTodayAttendance()).unwrap(),
-        dispatch(fetchOfficeLocations()).unwrap(),
-      ]);
-    } catch (error) {
-      console.error('❌ Load today attendance error:', error);
+
+      // Check cached office locations — only refetch if older than 24 hours
+      const cachedAt = await AsyncStorage.getItem('officeLocationsCachedAt');
+      const isCacheValid = cachedAt
+        ? Date.now() - parseInt(cachedAt, 10) < 24 * 60 * 60 * 1000
+        : false;
+
+      if (isCacheValid) {
+        await dispatch(fetchTodayAttendance()).unwrap();
+      } else {
+        await Promise.all([
+          dispatch(fetchTodayAttendance()).unwrap(),
+          dispatch(fetchOfficeLocations())
+            .unwrap()
+            .then(() =>
+              AsyncStorage.setItem(
+                'officeLocationsCachedAt',
+                String(Date.now()),
+              ),
+            ),
+        ]);
+      }
+    } catch {
+      // non-critical — attendance still loads on next refresh
     } finally {
       setIsFetchingToday(false);
     }
@@ -196,8 +240,8 @@ export const useAttendance = () => {
         dispatch(fetchTodayAttendance()).unwrap(),
         dispatch(fetchOfficeLocations()).unwrap(),
       ]);
-    } catch (error) {
-      console.error('❌ Refresh today attendance error:', error);
+    } catch {
+      // fail silently on pull-to-refresh errors
     } finally {
       setRefreshing(false);
     }
@@ -216,30 +260,17 @@ export const useAttendance = () => {
       stopDistanceTracking();
     }
     return () => stopDistanceTracking();
-  }, [selectedMode, checkedIn, hasCheckedOut, startDistanceTracking, stopDistanceTracking]);
+  }, [
+    selectedMode,
+    checkedIn,
+    hasCheckedOut,
+    startDistanceTracking,
+    stopDistanceTracking,
+  ]);
 
   useEffect(() => {
     loadTodayAttendance();
   }, [loadTodayAttendance]);
-
-  const warmupGPS = useCallback(() => {
-    gpsWarmupWatchId.current = Geolocation.watchPosition(
-      position => {
-        lastKnownLocation.current = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          timestamp: Date.now(),
-        };
-      },
-      error => console.log('⚠️ GPS warmup:', error.message),
-      {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 60000,
-        distanceFilter: 50,
-      },
-    );
-  }, []);
 
   const checkGPSStatus = useCallback(async () => {
     try {
@@ -249,22 +280,20 @@ export const useAttendance = () => {
         setShowLocationModal(true);
       } else {
         setShowLocationModal(false);
-        warmupGPS();
+        // The unified watcher in startDistanceTracking also warms up GPS
+        // No separate warmup watcher needed
       }
-    } catch (error) {
-      console.error('GPS check error:', error);
+    } catch {
+      // GPS check is best-effort
     }
-  }, [warmupGPS]);
+  }, [hasLocationPermission, isGPSEnabled]);
 
   useEffect(() => {
     checkGPSStatus();
-    warmupGPS();
     return () => {
-      if (gpsWarmupWatchId.current !== null) {
-        Geolocation.clearWatch(gpsWarmupWatchId.current);
-      }
+      // The unified gpsWatchId is cleaned up in stopDistanceTracking
     };
-  }, [checkGPSStatus, warmupGPS]);
+  }, [checkGPSStatus]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {

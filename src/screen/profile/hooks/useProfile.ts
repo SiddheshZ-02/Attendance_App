@@ -28,7 +28,10 @@ export const useProfile = () => {
         .unwrap()
         .then(result => {
           if (!result) {
-            navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' as never }],
+            });
           }
         })
         .finally(() => {
@@ -58,8 +61,8 @@ export const useProfile = () => {
     try {
       setRefreshing(true);
       await dispatch(checkSession()).unwrap();
-    } catch (error) {
-      console.error('❌ Profile refresh error:', error);
+    } catch {
+      // fail silently — user can retry with another pull-to-refresh
     } finally {
       setRefreshing(false);
     }

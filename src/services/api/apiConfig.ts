@@ -3,6 +3,7 @@
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import { Attendance_API_TIMEOUT } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../../constants/app';
 import { store } from '../../store';
 import { setSessionExpired } from '../../features/auth/authSlice';
@@ -55,7 +56,8 @@ export const apiCall = async (
 
     const code = data?.code || 'TOKEN_EXPIRED';
     if (['TOKEN_EXPIRED', 'INVALID_TOKEN', 'TOKEN_REVOKED'].includes(code)) {
-      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      const credentials = await Keychain.getGenericPassword();
+      const refreshToken = credentials ? JSON.parse(credentials.password).refreshToken : null;
       if (refreshToken) {
         const refreshResp = await doFetch(`${base}${API_ENDPOINTS.AUTH.REFRESH}`,
           {
@@ -69,12 +71,15 @@ export const apiCall = async (
         try { refreshData = await refreshResp.json(); } catch { refreshData = null; }
         if (refreshResp.ok && refreshData?.success && refreshData?.data?.token) {
           const newToken = refreshData.data.token;
-          const newRefreshToken = refreshData.data.refreshToken;
+          const newRefreshToken = refreshData.data.refreshToken || refreshToken;
           
-          await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, newToken);
-          if (newRefreshToken) {
-            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
-          }
+          await Keychain.setGenericPassword(
+            'auth_tokens',
+            JSON.stringify({ 
+              token: newToken, 
+              refreshToken: newRefreshToken 
+            })
+          );
 
           ({ resp, data } = await exec(newToken));
           if (resp.status === 401) {
@@ -91,9 +96,8 @@ export const apiCall = async (
       throw { code: 'REQUEST_TIMEOUT', message: 'Request timed out. Please try again.' };
     }
     if (['SESSION_REVOKED', 'TOKEN_REVOKED', 'INVALID_REFRESH', 'REFRESH_TOKEN_EXPIRED'].includes(error?.code)) {
+      await Keychain.resetGenericPassword();
       await AsyncStorage.multiRemove([
-        STORAGE_KEYS.AUTH_TOKEN,
-        STORAGE_KEYS.REFRESH_TOKEN,
         STORAGE_KEYS.USER_ID,
         STORAGE_KEYS.USER_NAME,
         STORAGE_KEYS.USER_EMAIL,

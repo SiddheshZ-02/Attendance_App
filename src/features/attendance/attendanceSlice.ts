@@ -1,7 +1,8 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, apiCall } from '../../services/api/apiConfig';
 import { setSessionExpired } from '../auth/authSlice';
+import { getAuthToken } from '../../utils/auth';
+import { calculateTotalHours } from '../../utils/time';
 
 type AttendanceStats = {
   firstCheckIn: string | null;
@@ -62,7 +63,7 @@ type TodayAttendancePayload = {
 export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | null>(
   'attendance/fetchToday',
   async (_, thunkAPI) => {
-    const token = await AsyncStorage.getItem('authToken');
+    const token = await getAuthToken();
     if (!token) return null;
     try {
       const data: any = await apiCall(
@@ -85,13 +86,9 @@ export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | nu
           : null,
       };
     } catch (error: any) {
-      if (error?.code === 'TOKEN_EXPIRED' || error?.code === 'INVALID_TOKEN') {
-        thunkAPI.dispatch(
-          setSessionExpired({
-            message: error?.message || 'Your session has expired.',
-          }),
-        );
-        return null;
+      const sessionCodes = ['TOKEN_EXPIRED', 'INVALID_TOKEN', 'SESSION_REVOKED', 'ACCOUNT_INACTIVE'];
+      if (sessionCodes.includes(error?.code)) {
+        thunkAPI.dispatch(setSessionExpired({ message: error?.message || 'Your session has expired.' }));
       }
       return null;
     }
@@ -101,7 +98,7 @@ export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | nu
 export const fetchOfficeLocations = createAsyncThunk<OfficeLocation[] | null>(
   'attendance/fetchOfficeLocations',
   async (_, thunkAPI) => {
-    const token = await AsyncStorage.getItem('authToken');
+    const token = await getAuthToken();
     if (!token) return null;
     try {
       const data: any = await apiCall(
@@ -144,7 +141,7 @@ export const logAttendance = createAsyncThunk<
   LogAttendanceArgs,
   { rejectValue: LogAttendanceError }
 >('attendance/logAttendance', async (payload, thunkAPI) => {
-  const token = await AsyncStorage.getItem('authToken');
+  const token = await getAuthToken();
   if (!token) {
     return thunkAPI.rejectWithValue({
       message: 'Not authenticated. Please login again.',
@@ -201,15 +198,10 @@ export const logAttendance = createAsyncThunk<
         : null,
     };
   } catch (error: any) {
-    if (error?.code === 'TOKEN_EXPIRED' || error?.code === 'INVALID_TOKEN') {
-      thunkAPI.dispatch(
-        setSessionExpired({
-          message: error?.message || 'Your session has expired.',
-        }),
-      );
-      return thunkAPI.rejectWithValue({
-        message: 'Session expired. Please login again.',
-      });
+    const sessionCodes = ['TOKEN_EXPIRED', 'INVALID_TOKEN', 'SESSION_REVOKED', 'ACCOUNT_INACTIVE'];
+    if (sessionCodes.includes(error?.code)) {
+      thunkAPI.dispatch(setSessionExpired({ message: error?.message || 'Your session has expired.' }));
+      return thunkAPI.rejectWithValue({ message: 'Session expired. Please login again.' });
     }
     return thunkAPI.rejectWithValue({
       message: error?.message || `Failed to ${payload.type}`,
@@ -232,15 +224,7 @@ const attendanceSlice = createSlice({
     },
     updateTotalHours(state) {
       if (state.checkedIn && state.stats.firstCheckIn) {
-        const checkIn = new Date(state.stats.firstCheckIn);
-        const now = new Date();
-        const diffMs = now.getTime() - checkIn.getTime();
-        if (diffMs > 0) {
-          const totalMinutes = Math.floor(diffMs / (1000 * 60));
-          const h = Math.floor(totalMinutes / 60);
-          const m = totalMinutes % 60;
-          state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
-        }
+        state.stats.totalHours = calculateTotalHours(state.stats.firstCheckIn, null);
       }
     },
     resetAttendance(state) {
@@ -265,18 +249,10 @@ const attendanceSlice = createSlice({
           state.stats.firstCheckIn = action.payload.attendance.checkInTime || null;
           state.stats.lastCheckOut = action.payload.attendance.checkOutTime || null;
           state.checkInLocation = action.payload.attendance.checkInLocation?.coordinates || null;
-          
-          if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
-            const checkIn = new Date(state.stats.firstCheckIn);
-            const checkOut = new Date(state.stats.lastCheckOut);
-            const diffMs = checkOut.getTime() - checkIn.getTime();
-            if (diffMs > 0) {
-              const totalMinutes = Math.floor(diffMs / (1000 * 60));
-              const h = Math.floor(totalMinutes / 60);
-              const m = totalMinutes % 60;
-              state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
-            }
-          }
+          state.stats.totalHours = calculateTotalHours(
+            state.stats.firstCheckIn,
+            state.stats.lastCheckOut,
+          );
         }
       })
       .addCase(fetchTodayAttendance.rejected, (state, action) => {
@@ -305,18 +281,10 @@ const attendanceSlice = createSlice({
           state.stats.firstCheckIn = action.payload.attendance.checkInTime || state.stats.firstCheckIn;
           state.stats.lastCheckOut = action.payload.attendance.checkOutTime || state.stats.lastCheckOut;
           state.checkInLocation = action.payload.attendance.checkInLocation?.coordinates || state.checkInLocation;
-          
-          if (state.stats.firstCheckIn && state.stats.lastCheckOut) {
-            const checkIn = new Date(state.stats.firstCheckIn);
-            const checkOut = new Date(state.stats.lastCheckOut);
-            const diffMs = checkOut.getTime() - checkIn.getTime();
-            if (diffMs > 0) {
-              const totalMinutes = Math.floor(diffMs / (1000 * 60));
-              const h = Math.floor(totalMinutes / 60);
-              const m = totalMinutes % 60;
-              state.stats.totalHours = `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}`;
-            }
-          }
+          state.stats.totalHours = calculateTotalHours(
+            state.stats.firstCheckIn,
+            state.stats.lastCheckOut,
+          );
         }
       })
       .addCase(logAttendance.rejected, (state, action) => {
