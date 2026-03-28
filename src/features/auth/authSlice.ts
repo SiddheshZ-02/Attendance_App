@@ -19,6 +19,8 @@ interface AuthState {
   user: User | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
+  // ✅ Starts as TRUE — navigation waits until Keychain is read.
+  //    This is the key fix that prevents Login flashing on re-open.
   checkingSession: boolean;
   logoutStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   sessionExpired: boolean;
@@ -30,7 +32,7 @@ const initialState: AuthState = {
   user: null,
   status: 'idle',
   error: null,
-  checkingSession: false,
+  checkingSession: true, // ← FIXED: was false (caused race condition)
   logoutStatus: 'idle',
   sessionExpired: false,
   sessionExpiredMessage: null,
@@ -99,10 +101,10 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
 
         await Keychain.setGenericPassword(
           'auth_tokens',
-          JSON.stringify({ 
-            token: data.data.token, 
-            refreshToken: data.data.refreshToken || '' 
-          })
+          JSON.stringify({
+            token: data.data.token,
+            refreshToken: data.data.refreshToken || '',
+          }),
         );
 
         await AsyncStorage.multiSet([
@@ -134,26 +136,84 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
   },
 );
 
-type CheckSessionResult =
-  | {
-      token: string;
-      user: User;
-    }
-  | null;
-
-export const checkSession = createAsyncThunk<CheckSessionResult>(
-  'auth/checkSession',
+// ─────────────────────────────────────────────────────────────────────────────
+// bootstrapSession — LOCAL ONLY, zero network calls.
+//
+// Reads Keychain + AsyncStorage to restore token/user in < 100ms.
+// Dispatched on app start from Index.tsx BEFORE navigation renders.
+// Because checkingSession starts as true, Login.tsx waits for this
+// to complete before deciding to navigate or show the login form.
+//
+// Also fires a fire-and-forget ping to /api/health to pre-warm the
+// Render free-tier server while the user watches the splash animation.
+// ─────────────────────────────────────────────────────────────────────────────
+export const bootstrapSession = createAsyncThunk<{ token: string; user: User } | null>(
+  'auth/bootstrapSession',
   async () => {
     try {
+      // Pre-warm Render so the server is ready when the user interacts.
+      // fire-and-forget — we do NOT await this.
+      fetch(`${API_CONFIG.BASE_URL}/api/health`).catch(() => {});
+
       const credentials = await Keychain.getGenericPassword();
-      if (!credentials) {
-        return null;
-      }
-      
+      if (!credentials) return null;
+
+      const parsed = JSON.parse(credentials.password);
+      const token: string | undefined = parsed?.token;
+      if (!token) return null;
+
+      // Restore user from AsyncStorage — fast local read, no network.
+      const stored = await AsyncStorage.multiGet([
+        'userId',
+        'userName',
+        'userEmail',
+        'userRole',
+        'employeeId',
+        'department',
+      ]);
+      const kv: Record<string, string> = {};
+      stored.forEach(([k, v]) => { if (v) kv[k] = v; });
+
+      // If userId is missing we cannot build a user object — force login.
+      if (!kv.userId) return null;
+
+      const user: User = {
+        id: kv.userId,
+        name: kv.userName || '',
+        email: kv.userEmail || '',
+        role: kv.userRole || '',
+        employeeId: kv.employeeId || '',
+        department: kv.department || '',
+      };
+
+      return { token, user };
+    } catch {
+      return null;
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// validateSession — Silent background network call.
+//
+// Called AFTER the app has already navigated to Tab (user is in the app).
+// Silently verifies the token with the server and refreshes user data.
+//
+// Success → update Redux with fresh profile data (silent, no flash).
+// Server rejects token (401) → set sessionExpired → SessionExpiredModal shows.
+// Network error / timeout → do NOTHING (user may be offline, keep session).
+// ─────────────────────────────────────────────────────────────────────────────
+type ValidateSessionResult = { token: string; user: User } | null;
+
+export const validateSession = createAsyncThunk<ValidateSessionResult>(
+  'auth/validateSession',
+  async (_, thunkAPI) => {
+    try {
+      const credentials = await Keychain.getGenericPassword();
+      if (!credentials) return null;
+
       const { token } = JSON.parse(credentials.password);
-      if (!token) {
-        return null;
-      }
+      if (!token) return null;
 
       const data = await apiCall(
         API_CONFIG.ENDPOINTS.AUTH.PROFILE,
@@ -162,7 +222,7 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
         token,
       );
 
-      if (data.success && data.data) {
+      if (data?.success && data?.data) {
         const user: User = {
           id: data.data._id,
           name: data.data.name || '',
@@ -174,6 +234,7 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
           position: data.data.position || '',
         };
 
+        // Refresh AsyncStorage cache with fresh server data.
         await AsyncStorage.multiSet([
           ['userName', user.name],
           ['userEmail', user.email],
@@ -182,14 +243,21 @@ export const checkSession = createAsyncThunk<CheckSessionResult>(
           ['department', user.department || ''],
         ]);
 
-        const updatedCredentials = await Keychain.getGenericPassword();
-        const updatedToken = updatedCredentials ? JSON.parse(updatedCredentials.password).token : token;
+        // Token may have been rotated by the refresh-token logic in apiCall.
+        const updatedCreds = await Keychain.getGenericPassword();
+        const updatedToken = updatedCreds
+          ? JSON.parse(updatedCreds.password).token
+          : token;
+
         return { token: updatedToken, user };
       }
 
+      // Server responded but said the session is invalid.
       return null;
     } catch {
-      return null;
+      // Network error or Render timeout — keep the locally bootstrapped session.
+      // User may simply be offline. Never force-logout on a network failure.
+      return thunkAPI.rejectWithValue(null);
     }
   },
 );
@@ -242,6 +310,7 @@ const authSlice = createSlice({
   },
   extraReducers: builder => {
     builder
+      // ── login ────────────────────────────────────────────────────
       .addCase(login.pending, state => {
         state.status = 'loading';
         state.error = null;
@@ -258,10 +327,12 @@ const authSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload?.message || action.error.message || null;
       })
-      .addCase(checkSession.pending, state => {
+
+      // ── bootstrapSession (fast local, < 100ms) ───────────────────
+      .addCase(bootstrapSession.pending, state => {
         state.checkingSession = true;
       })
-      .addCase(checkSession.fulfilled, (state, action) => {
+      .addCase(bootstrapSession.fulfilled, (state, action) => {
         state.checkingSession = false;
         if (action.payload) {
           state.token = action.payload.token;
@@ -271,9 +342,32 @@ const authSlice = createSlice({
           state.user = null;
         }
       })
-      .addCase(checkSession.rejected, state => {
+      .addCase(bootstrapSession.rejected, state => {
         state.checkingSession = false;
+        state.token = null;
+        state.user = null;
       })
+
+      // ── validateSession (silent background network call) ──────────
+      .addCase(validateSession.fulfilled, (state, action) => {
+        if (action.payload) {
+          // Server confirmed the session — update with fresh profile data.
+          state.token = action.payload.token;
+          state.user = action.payload.user;
+        } else {
+          // null = server responded and explicitly rejected the token.
+          // Show session-expired modal (graceful UX, not a hard crash).
+          state.token = null;
+          state.user = null;
+          state.sessionExpired = true;
+          state.sessionExpiredMessage =
+            'Your session has expired. Please log in again.';
+        }
+      })
+      // validateSession.rejected = network / timeout error → do nothing,
+      // keep the locally bootstrapped session alive.
+
+      // ── logout ───────────────────────────────────────────────────
       .addCase(logout.pending, state => {
         state.logoutStatus = 'loading';
       })

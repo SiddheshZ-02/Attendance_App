@@ -21,7 +21,7 @@ import Icon1 from 'react-native-vector-icons/Ionicons';
 import { useToast } from 'react-native-toast-notifications';
 import { getCurrentLocation } from '../../services/location/locationService';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
-import { checkSession, login } from '../../features/auth/authSlice';
+import { login, validateSession } from '../../features/auth/authSlice';
 import EMSLogo from '../../assets/svg/EMS.svg';
 import { createThemedStyles, useResponsive } from '../../utils/responsive';
 
@@ -44,8 +44,10 @@ const Login = () => {
   const passwordRef = useRef<TextInput>(null);
 
   // Phase management
+  // isSplashDone — true when the 1-second logo animation completes.
+  // We wait for BOTH the animation AND auth.checkingSession=false (Keychain
+  // read done) before deciding to navigate or show the form.
   const [isSplashDone, setIsSplashDone] = useState(false);
-  const [isSessionCheckDone, setIsSessionCheckDone] = useState(false);
   const hasNavigated = useRef(false);
 
   // Animated values
@@ -74,30 +76,40 @@ const Login = () => {
       setIsSplashDone(true);
     });
 
-    // 2. Perform Session Check
-    dispatch(checkSession()).finally(() => {
-      setIsSessionCheckDone(true);
-    });
+    // 2. Session check is handled by bootstrapSession dispatched in Index.tsx.
+    //    It reads Keychain locally (< 100ms) and sets auth.checkingSession=false.
+    //    By the time this 1-second animation ends, the session is already known.
   }, []);
 
-  // 3. Coordinate transitions
+  // 3. Coordinate transitions.
+  //
+  // We wait for two things:
+  //   a) isSplashDone        — the 1-second logo animation is complete
+  //   b) !auth.checkingSession — bootstrapSession (Keychain read) is complete
+  //
+  // Because checkingSession starts as TRUE and the Keychain read takes < 100ms,
+  // there is zero race-condition: the animation always finishes AFTER the read.
   useEffect(() => {
-    if (isSplashDone && isSessionCheckDone && !hasNavigated.current) {
+    if (isSplashDone && !auth.checkingSession && !hasNavigated.current) {
       if (auth.token && auth.user) {
-        // SESSION VALID
+        // SESSION VALID — navigate instantly (token was read from local Keychain)
         hasNavigated.current = true;
-        // Optional: Small delay to show logo at center
         setTimeout(() => {
           navigation.reset({
             index: 0,
             routes: [{ name: 'Tab' as never }],
           });
+          // Fire background validation AFTER the user is already in the app.
+          // If Render is sleeping this takes 10–30s but the user is unblocked.
+          // On success → silently refreshes user data.
+          // On failure → SessionExpiredModal appears gracefully.
+          dispatch(validateSession());
         }, 200);
       } else {
-        // SESSION INVALID -> Transition to Login Form
+        // NO SESSION — animate the form in (identical animation as before)
         setShowForm(true);
         Animated.parallel([
-          // Logo to top
+          // Logo moves up
           Animated.timing(logoY, {
             toValue: hp(60),
             duration: 800,
@@ -109,7 +121,7 @@ const Login = () => {
             duration: 800,
             useNativeDriver: true,
           }),
-          // Form from bottom
+          // Form slides up from bottom
           Animated.timing(formY, {
             toValue: 0,
             duration: 1000,
@@ -124,7 +136,7 @@ const Login = () => {
         ]).start();
       }
     }
-  }, [isSplashDone, isSessionCheckDone, auth.token, auth.user]);
+  }, [isSplashDone, auth.checkingSession, auth.token, auth.user]);
 
   // Handle successful manual login transition
   useEffect(() => {
