@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, TextInput, ScrollView, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, ScrollView, Switch, ActivityIndicator, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import BiometricModal from '../../../components/BiometricModal';
 import { useResponsive } from '../../../utils/responsive';
 
 interface Props {
@@ -21,6 +23,7 @@ const ProfileForm: React.FC<Props> = ({
   onBiometricToggle,
 }) => {
   const { wp } = useResponsive();
+  const [isBiometricModalVisible, setBiometricModalVisible] = React.useState(false);
 
   const lockTitle = biometricLabel
     ? `App lock (${biometricLabel})`
@@ -37,7 +40,28 @@ const ProfileForm: React.FC<Props> = ({
       </View>
 
       <View style={styles.bottomContainer}>
-        <Text style={styles.sectionTitle}>General Information</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.sectionTitle}>General Information</Text>
+          <TouchableOpacity onPress={() => setBiometricModalVisible(true)}>
+            <Ionicons 
+              name="finger-print-sharp" 
+              size={wp(30)} 
+              color={biometricEnabled ? '#22C55E' : '#EF4444'} 
+            />
+          </TouchableOpacity>
+        </View>
+
+        <BiometricModal
+          isVisible={isBiometricModalVisible}
+          onClose={() => setBiometricModalVisible(false)}
+          onActivateBiometrics={() => {
+            // This will be handled by the switch inside the modal
+          }}
+          biometricLabel={biometricLabel}
+          biometricEnabled={biometricEnabled}
+          biometricBusy={biometricBusy}
+          onBiometricToggle={onBiometricToggle}
+        />
 
         <View style={styles.inputWrapper}>
           <Text style={styles.label}>Email</Text>
@@ -76,26 +100,6 @@ const ProfileForm: React.FC<Props> = ({
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: wp(8) }]}>Security</Text>
-        <View style={styles.biometricRow}>
-          <View style={{ flex: 1, paddingRight: wp(12) }}>
-            <Text style={styles.biometricTitle}>{lockTitle}</Text>
-            <Text style={styles.biometricHint}>
-              When on, opening the app requires your device biometric or PIN to read saved login
-              tokens.
-            </Text>
-          </View>
-          {biometricBusy ? (
-            <ActivityIndicator color="#0A1F4A" />
-          ) : (
-            <Switch
-              value={biometricEnabled}
-              onValueChange={v => onBiometricToggle?.(v)}
-              trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-              thumbColor={biometricEnabled ? '#0A1F4A' : '#F3F4F6'}
-            />
-          )}
-        </View>
       </View>
     </ScrollView>
   );

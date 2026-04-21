@@ -1,6 +1,9 @@
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import { Attendance_API_TIMEOUT } from '@env';
-import { loadAuthTokens, persistAuthTokens } from '../auth/secureCredentials';
+import {
+  loadAuthTokensSilent,
+  persistAuthTokens,
+} from '../auth/secureCredentials';
 
 function decodeJwtExp(token: string): number | null {
   try {
@@ -27,7 +30,7 @@ const doFetch = async (url: string, options: RequestInit, timeoutMs: number) => 
 };
 
 /** POST /refresh using refresh token from Keychain. Returns new access token or null. */
-export async function performTokenRefresh(): Promise<{
+export async function performTokenRefresh(manualRefreshToken?: string): Promise<{
   token: string;
   refreshToken: string;
 } | null> {
@@ -35,8 +38,13 @@ export async function performTokenRefresh(): Promise<{
   if (!base) return null;
   const timeoutMs = Number(Attendance_API_TIMEOUT) || 12000;
 
-  const creds = await loadAuthTokens();
-  const refreshToken = creds?.refreshToken;
+  let refreshToken = manualRefreshToken;
+
+  if (!refreshToken) {
+    const creds = await loadAuthTokensSilent();
+    refreshToken = creds?.refreshToken;
+  }
+  
   if (!refreshToken) return null;
 
   const refreshResp = await doFetch(
@@ -59,7 +67,7 @@ export async function performTokenRefresh(): Promise<{
   }
   const newToken = refreshData.data.token as string;
   const newRefresh = (refreshData.data.refreshToken as string) || refreshToken;
-  await persistAuthTokens({ token: newToken, refreshToken: newRefresh });
+  await persistAuthTokens({ token: newToken, refreshToken: newRefresh }, true);
   return { token: newToken, refreshToken: newRefresh };
 }
 
@@ -68,6 +76,7 @@ export async function performTokenRefresh(): Promise<{
  */
 export async function ensureFreshAccessToken(
   accessToken: string | null,
+  refreshToken?: string | null,
   skewSec = 300,
 ): Promise<string | null> {
   if (!accessToken) return null;
@@ -76,6 +85,6 @@ export async function ensureFreshAccessToken(
   const msLeft = exp * 1000 - Date.now();
   if (msLeft > skewSec * 1000) return accessToken;
 
-  const rotated = await performTokenRefresh();
+  const rotated = await performTokenRefresh(refreshToken || undefined);
   return rotated?.token ?? accessToken;
 }

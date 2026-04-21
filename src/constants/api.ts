@@ -1,7 +1,7 @@
 // API Constants
 import { Attendance_API_BASE_URL } from '@env';
 
-export const API_BASE_URL = Attendance_API_BASE_URL;
+export const API_BASE_URL = Attendance_API_BASE_URL?.replace(/["']/g, '').replace(/\/$/, '');
 
 export const API_ENDPOINTS = {
   AUTH: {

@@ -1,13 +1,13 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG, apiCall } from '../../services/api/apiConfig';
+import DeviceInfo from 'react-native-device-info';
+import { API_CONFIG, apiCall, purgeLocalSession } from '../../services/api/apiConfig';
 import { STORAGE_KEYS } from '../../constants/app';
 import {
-  clearAuthCredentials,
   loadAuthTokens,
+  loadAuthTokensSilent,
   persistAuthTokens,
 } from '../../services/auth/secureCredentials';
-
 export interface User {
   id: string;
   name: string;
@@ -21,6 +21,7 @@ export interface User {
 
 interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   user: User | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
@@ -28,10 +29,14 @@ interface AuthState {
   logoutStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   sessionExpired: boolean;
   sessionExpiredMessage?: string | null;
+  isIntentionalLogout?: boolean;
+  isBiometricEnabled: boolean;
+  recentManualLogin: boolean;
 }
 
 const initialState: AuthState = {
   token: null,
+  refreshToken: null,
   user: null,
   status: 'idle',
   error: null,
@@ -39,6 +44,9 @@ const initialState: AuthState = {
   logoutStatus: 'idle',
   sessionExpired: false,
   sessionExpiredMessage: null,
+  isIntentionalLogout: false,
+  isBiometricEnabled: false,
+  recentManualLogin: false,
 };
 
 type LoginArgs = {
@@ -87,10 +95,12 @@ const userStoragePairs = (data: {
 export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: LoginError }>(
   'auth/login',
   async (payload, thunkAPI) => {
+    const deviceId = await DeviceInfo.getUniqueId();
     const loginData: Record<string, any> = {
       email: payload.email.trim().toLowerCase(),
       password: payload.password,
       platform: 'app',
+      deviceId: deviceId,
       location: payload.location
         ? {
             latitude: payload.location.latitude,
@@ -120,10 +130,13 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
           position: data.data.position || '',
         };
 
-        await persistAuthTokens({
-          token: data.data.token,
-          refreshToken: data.data.refreshToken || '',
-        });
+        await persistAuthTokens(
+          {
+            token: data.data.token,
+            refreshToken: data.data.refreshToken || '',
+          },
+          true,
+        );
 
         await AsyncStorage.multiSet(userStoragePairs(data.data));
 
@@ -147,7 +160,7 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
   },
 );
 
-export const bootstrapSession = createAsyncThunk<{ token: string; user: User } | null>(
+export const bootstrapSession = createAsyncThunk<{ token: string; refreshToken: string; user: User } | null>(
   'auth/bootstrapSession',
   async () => {
     try {
@@ -180,27 +193,35 @@ export const bootstrapSession = createAsyncThunk<{ token: string; user: User } |
         department: kv[STORAGE_KEYS.DEPARTMENT] || '',
       };
 
-      return { token: creds.token, user };
+      return { token: creds.token, refreshToken: creds.refreshToken, user };
     } catch {
       return null;
     }
   },
 );
 
-type ValidateSessionResult = { token: string; user: User } | null;
+type ValidateSessionResult = { token: string; refreshToken?: string; user: User } | null;
 
-export const validateSession = createAsyncThunk<ValidateSessionResult>(
+export const validateSession = createAsyncThunk<ValidateSessionResult, string | void>(
   'auth/validateSession',
-  async (_, thunkAPI) => {
+  async (manualToken, thunkAPI) => {
     try {
-      const creds = await loadAuthTokens();
-      if (!creds?.token) return null;
+      // Use manual token, then state token to avoid Keychain/Biometric prompt during active session
+      const state = thunkAPI.getState() as { auth: AuthState };
+      let token = (manualToken as string) || state.auth.token;
+
+      // If no token anywhere, only then try loading from Keychain (silently)
+      if (!token) {
+        const creds = await loadAuthTokensSilent();
+        if (!creds?.token) return null;
+        token = creds.token;
+      }
 
       const data = await apiCall(
         API_CONFIG.ENDPOINTS.AUTH.PROFILE,
         'GET',
         null,
-        creds.token,
+        token,
       );
 
       if (data?.success && data?.data) {
@@ -223,10 +244,12 @@ export const validateSession = createAsyncThunk<ValidateSessionResult>(
           [STORAGE_KEYS.DEPARTMENT, user.department || ''],
         ]);
 
-        const updated = await loadAuthTokens();
-        const updatedToken = updated?.token || creds.token;
+        // After apiCall, the token might have been refreshed in state
+        const latestState = thunkAPI.getState() as { auth: AuthState };
+        const latestToken = latestState.auth.token || token;
+        const latestRefreshToken = latestState.auth.refreshToken;
 
-        return { token: updatedToken, user };
+        return { token: latestToken, refreshToken: latestRefreshToken || undefined, user };
       }
 
       return null;
@@ -236,43 +259,27 @@ export const validateSession = createAsyncThunk<ValidateSessionResult>(
   },
 );
 
-export const logout = createAsyncThunk('auth/logout', async () => {
-  const creds = await loadAuthTokens();
-  const token = creds?.token;
+export const logout = createAsyncThunk('auth/logout', async (_, thunkAPI) => {
+  const state = thunkAPI.getState() as { auth: AuthState };
+  const token = state.auth.token;
   try {
     if (token) {
       await apiCall(API_CONFIG.ENDPOINTS.AUTH.LOGOUT, 'POST', {}, token).catch(() => {});
     }
   } finally {
-    await clearAuthCredentials();
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.USER_ID,
-      STORAGE_KEYS.USER_NAME,
-      STORAGE_KEYS.USER_EMAIL,
-      STORAGE_KEYS.USER_ROLE,
-      STORAGE_KEYS.EMPLOYEE_ID,
-      STORAGE_KEYS.DEPARTMENT,
-    ]);
+    await purgeLocalSession('You have been logged out.', true);
   }
 });
 
-export const logoutAllDevices = createAsyncThunk('auth/logoutAllDevices', async () => {
-  const creds = await loadAuthTokens();
-  const token = creds?.token;
+export const logoutAllDevices = createAsyncThunk('auth/logoutAllDevices', async (_, thunkAPI) => {
+  const state = thunkAPI.getState() as { auth: AuthState };
+  const token = state.auth.token;
   try {
     if (token) {
       await apiCall(API_CONFIG.ENDPOINTS.AUTH.LOGOUT_ALL, 'POST', {}, token).catch(() => {});
     }
   } finally {
-    await clearAuthCredentials();
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.USER_ID,
-      STORAGE_KEYS.USER_NAME,
-      STORAGE_KEYS.USER_EMAIL,
-      STORAGE_KEYS.USER_ROLE,
-      STORAGE_KEYS.EMPLOYEE_ID,
-      STORAGE_KEYS.DEPARTMENT,
-    ]);
+    await purgeLocalSession('You have been logged out from all devices.', true);
   }
 });
 
@@ -285,16 +292,28 @@ const authSlice = createSlice({
     },
     setSessionExpired(
       state,
-      action: PayloadAction<{ message?: string } | null>,
+      action: PayloadAction<{ message?: string; isIntentionalLogout?: boolean } | null>,
     ) {
       if (action.payload) {
         state.sessionExpired = true;
         state.sessionExpiredMessage =
-          action.payload.message || 'Session ended. Your account was used on another platform';
+          action.payload.message || 'Your session has ended. Please log in again.';
+        state.isIntentionalLogout = action.payload.isIntentionalLogout || false;
       } else {
         state.sessionExpired = false;
         state.sessionExpiredMessage = null;
+        state.isIntentionalLogout = false;
       }
+    },
+    setTokens(state, action: PayloadAction<{ token: string; refreshToken: string }>) {
+      state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
+    },
+    setBiometricEnabled(state, action: PayloadAction<boolean>) {
+      state.isBiometricEnabled = action.payload;
+    },
+    setRecentManualLogin(state, action: PayloadAction<boolean>) {
+      state.recentManualLogin = action.payload;
     },
   },
   extraReducers: builder => {
@@ -306,10 +325,13 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.token = action.payload.token;
+        state.refreshToken = action.payload.refreshToken;
         state.user = action.payload.user;
         state.error = null;
         state.sessionExpired = false;
         state.sessionExpiredMessage = null;
+        state.isIntentionalLogout = false;
+        state.recentManualLogin = true;
       })
       .addCase(login.rejected, (state, action) => {
         state.status = 'failed';
@@ -322,23 +344,32 @@ const authSlice = createSlice({
         state.checkingSession = false;
         if (action.payload) {
           state.token = action.payload.token;
+          state.refreshToken = action.payload.refreshToken;
           state.user = action.payload.user;
+          state.isIntentionalLogout = false;
         } else {
           state.token = null;
+          state.refreshToken = null;
           state.user = null;
         }
       })
       .addCase(bootstrapSession.rejected, state => {
         state.checkingSession = false;
         state.token = null;
+        state.refreshToken = null;
         state.user = null;
       })
       .addCase(validateSession.fulfilled, (state, action) => {
         if (action.payload) {
           state.token = action.payload.token;
+          if (action.payload.refreshToken) {
+            state.refreshToken = action.payload.refreshToken;
+          }
           state.user = action.payload.user;
+          state.isIntentionalLogout = false;
         } else {
           state.token = null;
+          state.refreshToken = null;
           state.user = null;
           state.sessionExpired = true;
           state.sessionExpiredMessage =
@@ -354,6 +385,7 @@ const authSlice = createSlice({
         state.user = null;
         state.sessionExpired = false;
         state.sessionExpiredMessage = null;
+        state.recentManualLogin = false;
       })
       .addCase(logout.rejected, state => {
         state.logoutStatus = 'failed';
@@ -369,6 +401,7 @@ const authSlice = createSlice({
         state.user = null;
         state.sessionExpired = false;
         state.sessionExpiredMessage = null;
+        state.recentManualLogin = false;
       })
       .addCase(logoutAllDevices.rejected, state => {
         state.logoutStatus = 'failed';
@@ -378,7 +411,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, setSessionExpired } = authSlice.actions;
+export const { setUser, setSessionExpired, setBiometricEnabled, setRecentManualLogin, setTokens } = authSlice.actions;
 export default authSlice.reducer;
 
 /** @deprecated Use `validateSession` — alias kept for profile refresh hook. */

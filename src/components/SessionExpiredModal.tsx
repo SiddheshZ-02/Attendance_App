@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { View, Modal, Text, TouchableOpacity } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../hooks/reduxHooks';
-import { logout, setSessionExpired } from '../features/auth/authSlice';
+import { setSessionExpired } from '../features/auth/authSlice';
 import { navigationRef } from '../navigation/navigationRef';
 import { useToast } from 'react-native-toast-notifications';
 import { createThemedStyles, useResponsive } from '../utils/responsive';
@@ -10,28 +10,30 @@ const SessionExpiredModal = () => {
   const dispatch = useAppDispatch();
   const styles = useStyles();
   const toast = useToast();
-  const { sessionExpired, sessionExpiredMessage } = useAppSelector(
+  const { sessionExpired, sessionExpiredMessage, isIntentionalLogout } = useAppSelector(
     s => s.auth,
   );
 
   useEffect(() => {
     if (sessionExpired) {
-      toast.show('Session ended', {
-        type: 'warning',
-        placement: 'top',
-        duration: 3000,
-      });
+      if (isIntentionalLogout) {
+        toast.show('Logout Successful', {
+          type: 'success',
+          placement: 'top',
+          duration: 3000,
+        });
+      } else {
+        toast.show('Session ended', {
+          type: 'warning',
+          placement: 'top',
+          duration: 3000,
+        });
+      }
     }
-  }, [sessionExpired, toast]);
+  }, [sessionExpired, isIntentionalLogout, toast]);
 
   const handleOk = useCallback(async () => {
-    // Clear auth state and storage
-    await dispatch(logout()).unwrap().catch(() => {});
-    
-    // Clear the modal state
     dispatch(setSessionExpired(null));
-    
-    // Reset navigation stack to the login screen
     if (navigationRef.isReady()) {
       navigationRef.reset({
         index: 0,
@@ -40,7 +42,7 @@ const SessionExpiredModal = () => {
     }
   }, [dispatch]);
 
-  if (!sessionExpired) return null;
+  if (!sessionExpired || isIntentionalLogout) return null;
 
   return (
     <Modal

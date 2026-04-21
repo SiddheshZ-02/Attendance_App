@@ -4,23 +4,60 @@ import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../../constants/app';
 
 const AUTH_KEYCHAIN_USER = 'auth_tokens';
+const CONFIG_KEYCHAIN_SERVICE = 'biometric_config';
 
 const biometricPrompt = {
-  title: 'Unlock attendance',
+  title: 'EMS Login',
   subtitle: 'Confirm your identity to continue',
   cancel: 'Cancel',
 };
 
-async function isBiometricAppLockEnabled(): Promise<boolean> {
-  const v = await AsyncStorage.getItem(STORAGE_KEYS.BIOMETRIC_APP_LOCK);
-  return v === '1';
+export async function getBiometricAppLockEnabled(): Promise<boolean> {
+  return await isBiometricAppLockEnabled();
 }
 
-export async function setBiometricAppLockEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEYS.BIOMETRIC_APP_LOCK, enabled ? '1' : '0');
+async function isBiometricAppLockEnabled(): Promise<boolean> {
+  try {
+    const res = await Keychain.getGenericPassword({
+      service: CONFIG_KEYCHAIN_SERVICE,
+    });
+    return res ? res.password === 'enabled' : false;
+  } catch {
+    return false;
+  }
+}
+
+export async function setBiometricAppLockEnabled(
+  enabled: boolean,
+): Promise<void> {
+  try {
+    if (enabled) {
+      await Keychain.setGenericPassword(
+        'config',
+        'enabled',
+        { service: CONFIG_KEYCHAIN_SERVICE },
+      );
+    } else {
+      await Keychain.resetGenericPassword({ service: CONFIG_KEYCHAIN_SERVICE });
+    }
+  } catch (err) {
+    console.error('Error setting biometric config in keychain:', err);
+  }
 }
 
 /** Raw read — works for migrating to/from biometric-protected items. */
+/**
+ * Check if credentials exist in the keychain without triggering a hardware prompt.
+ */
+export async function hasSavedCredentials(): Promise<boolean> {
+  try {
+    const has = await Keychain.hasGenericPassword();
+    return has;
+  } catch {
+    return false;
+  }
+}
+
 export async function peekKeychainPasswordJson(): Promise<string | null> {
   try {
     const row = await Keychain.getGenericPassword();
@@ -52,22 +89,46 @@ export async function loadAuthTokens(): Promise<{ token: string; refreshToken: s
   }
 }
 
-export async function persistAuthTokens(tokens: {
-  token: string;
-  refreshToken: string;
-}): Promise<void> {
+/** 
+ * Read tokens without hardware prompt, even if biometric is enabled. 
+ * This only works if the Keychain item was NOT saved with BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE.
+ * However, since we use it for disabling, we can use the raw peek if possible or fallback.
+ */
+export async function loadAuthTokensSilent(): Promise<{ token: string; refreshToken: string } | null> {
+  try {
+    const raw = await peekKeychainPasswordJson();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string; refreshToken?: string };
+    if (!parsed?.token) return null;
+    return {
+      token: parsed.token,
+      refreshToken: parsed.refreshToken || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function persistAuthTokens(
+  tokens: {
+    token: string;
+    refreshToken: string;
+  },
+  forceSilent: boolean = false,
+): Promise<void> {
   const json = JSON.stringify({
     token: tokens.token,
     refreshToken: tokens.refreshToken || '',
   });
-  const biometric = await isBiometricAppLockEnabled();
+  const biometric = !forceSilent && (await isBiometricAppLockEnabled());
 
   await Keychain.resetGenericPassword();
 
   if (biometric) {
     await Keychain.setGenericPassword(AUTH_KEYCHAIN_USER, json, {
       accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE,
+      accessControl:
+        Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE,
       authenticationPrompt: biometricPrompt,
       ...(Platform.OS === 'android'
         ? { storage: Keychain.STORAGE_TYPE.AES_GCM }
@@ -80,6 +141,7 @@ export async function persistAuthTokens(tokens: {
 
 export async function clearAuthCredentials(): Promise<void> {
   await Keychain.resetGenericPassword();
+  await Keychain.resetGenericPassword({ service: CONFIG_KEYCHAIN_SERVICE });
 }
 
 /** After enabling biometrics: re-save current tokens with hardware protection. */
@@ -107,6 +169,17 @@ export async function migrateKeychainFromBiometric(): Promise<boolean> {
   await setBiometricAppLockEnabled(false);
   await persistAuthTokens(tokens);
   return true;
+}
+
+/** Turn off biometric lock silently using current session tokens from memory or raw peek. */
+export async function migrateKeychainFromBiometricSilent(currentTokens: { token: string; refreshToken: string }): Promise<boolean> {
+  try {
+    await setBiometricAppLockEnabled(false);
+    await persistAuthTokens(currentTokens);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getSupportedBiometryLabel(): Promise<string | null> {

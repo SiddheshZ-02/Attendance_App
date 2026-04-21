@@ -6,7 +6,9 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
+import * as Keychain from 'react-native-keychain';
 import { useProfile } from './hooks/useProfile';
 import ProfileHeader from './components/ProfileHeader';
 import ProfileForm from './components/ProfileForm';

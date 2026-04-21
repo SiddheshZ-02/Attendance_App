@@ -15,23 +15,31 @@ import {
   StatusBar,
 } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import Icon1 from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useToast } from 'react-native-toast-notifications';
 import { getCurrentLocation } from '../../services/location/locationService';
+import { getBiometricAppLockEnabled } from '../../services/auth/secureCredentials';
 import { useAppDispatch, useAppSelector } from '../../hooks/reduxHooks';
-import { login, validateSession } from '../../features/auth/authSlice';
+import { login, validateSession, setBiometricEnabled, setRecentManualLogin } from '../../features/auth/authSlice';
 import EMSLogo from '../../assets/svg/EMS.svg';
 import { createThemedStyles, useResponsive } from '../../utils/responsive';
+import * as Keychain from 'react-native-keychain';
+
 
 const Login = () => {
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const toast = useToast();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(state => state.auth);
   const { hp, wp, SCREEN, containerMaxWidth } = useResponsive();
   const styles = useStyles();
+
+  const isUnlockMode = route.params?.mode === 'unlock';
+  const [biometricType, setBiometricType] = useState<string | null>(null);
+  const [canLoginWithBiometric, setCanLoginWithBiometric] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +47,7 @@ const Login = () => {
   const [loadingMessage, setLoadingMessage] = useState('Logging in...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showUnlockUI, setShowUnlockModeUI] = useState(isUnlockMode);
 
   // Ref to forward keyboard focus from email → password
   const passwordRef = useRef<TextInput>(null);
@@ -57,6 +66,101 @@ const Login = () => {
   const formOpacity = useRef(new Animated.Value(0)).current;
 
   const isLoading = auth.status === 'loading';
+
+  useEffect(() => {
+    checkBiometricAvailability();
+  }, []);
+
+  const checkBiometricAvailability = async () => {
+    const isEnabled = await getBiometricAppLockEnabled();
+    const supportedType = await Keychain.getSupportedBiometryType();
+    
+    if (isEnabled && supportedType) {
+      setCanLoginWithBiometric(true);
+      setBiometricType(supportedType === Keychain.BIOMETRY_TYPE.FACE_ID ? 'Face ID' : 'Fingerprint');
+      dispatch(setBiometricEnabled(true));
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    // If already submitting manual login or already navigating, don't trigger biometric
+    if (isSubmitting || hasNavigated.current) return;
+
+    try {
+      const creds = await Keychain.getGenericPassword({
+        authenticationPrompt: {
+          title: 'Unlock App',
+          subtitle: 'Please authenticate to continue',
+          cancel: 'Cancel',
+        },
+      });
+
+      if (creds) {
+        // Success - navigate to Tab
+        hasNavigated.current = true;
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Tab' as never }],
+        });
+
+        // Parse token from keychain password field
+        try {
+          const parsed = JSON.parse(creds.password);
+          if (parsed && parsed.token) {
+            dispatch(validateSession(parsed.token));
+          } else {
+            dispatch(validateSession());
+          }
+        } catch {
+          dispatch(validateSession());
+        }
+      }
+    } catch (error) {
+      console.log('Biometric login failed', error);
+      if (isUnlockMode) {
+        toast.show('Biometric authentication failed. Please use password.', { type: 'danger' });
+      }
+    }
+  };
+
+  // Centralized Biometric Auto-Trigger
+  useEffect(() => {
+    // DO NOT trigger if:
+    // 1. Biometric is not enabled
+    // 2. Already navigated or navigating
+    // 3. In the middle of manual login submission
+    // 4. User JUST logged in manually (recentManualLogin is true)
+    // 5. Manual login form is visible (means user is choosing to type)
+    if (!canLoginWithBiometric || hasNavigated.current || isSubmitting || auth.recentManualLogin || showForm) {
+      return;
+    }
+
+    // Trigger ONLY in these specific scenarios:
+    const isStartupSession = auth.token && auth.user && !auth.checkingSession;
+    const isAuthTransition = isUnlockMode || auth.isIntentionalLogout || auth.sessionExpired;
+
+    if (isStartupSession || isAuthTransition) {
+      // Small delay for smooth UI transition
+      const timer = setTimeout(() => {
+        // Double check flags before calling
+        if (!hasNavigated.current && !isSubmitting && !showForm) {
+          handleBiometricLogin();
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    canLoginWithBiometric,
+    isUnlockMode,
+    auth.isIntentionalLogout,
+    auth.sessionExpired,
+    auth.token,
+    auth.user,
+    auth.checkingSession,
+    auth.recentManualLogin,
+    showForm,
+    isSubmitting
+  ]);
 
   useEffect(() => {
     // 1. Initial Logo Animation: Bottom to Center
@@ -92,19 +196,23 @@ const Login = () => {
   useEffect(() => {
     if (isSplashDone && !auth.checkingSession && !hasNavigated.current) {
       if (auth.token && auth.user) {
-        // SESSION VALID — navigate instantly (token was read from local Keychain)
-        hasNavigated.current = true;
-        setTimeout(() => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Tab' as never }],
-          });
-          // Fire background validation AFTER the user is already in the app.
-          // If Render is sleeping this takes 10–30s but the user is unblocked.
-          // On success → silently refreshes user data.
-          // On failure → SessionExpiredModal appears gracefully.
-          dispatch(validateSession());
-        }, 200);
+        // If form is showing, it means we are in the middle of a manual login process
+        // or the user just logged in manually. We should NOT trigger biometric auto-prompt here.
+        if (showForm) return;
+
+        // SESSION VALID — navigate instantly
+        // Biometric prompt is now handled by the centralized useEffect above.
+        // If biometric is NOT enabled or user just logged in manually, navigate instantly.
+        if (!canLoginWithBiometric || auth.recentManualLogin) {
+          hasNavigated.current = true;
+          setTimeout(() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Tab' as never }],
+            });
+            dispatch(validateSession());
+          }, 200);
+        }
       } else {
         // NO SESSION — animate the form in (identical animation as before)
         setShowForm(true);
@@ -136,7 +244,7 @@ const Login = () => {
         ]).start();
       }
     }
-  }, [isSplashDone, auth.checkingSession, auth.token, auth.user]);
+  }, [isSplashDone, auth.checkingSession, auth.token, auth.user, canLoginWithBiometric]);
 
   // Handle successful manual login transition
   useEffect(() => {
@@ -240,6 +348,7 @@ const Login = () => {
         placement: 'top',
         duration: 3000,
       });
+      dispatch(setRecentManualLogin(true));
     } catch (error: any) {
       if (error && (error.code || error.message)) {
         handleLoginError(error);
@@ -337,90 +446,114 @@ const Login = () => {
                     containerMaxWidth ? { maxWidth: containerMaxWidth } : null,
                   ]}
                 >
-                  <Text style={styles.heading}>Login</Text>
+                  {showUnlockUI ? (
+                    <View style={styles.unlockContainer}>
+                      <Text style={styles.heading}>Unlock App</Text>
+                      <Text style={styles.unlockSubtitle}>Welcome back! Please unlock to continue.</Text>
+                      
+                      <TouchableOpacity 
+                        style={styles.biometricBigButton} 
+                        onPress={handleBiometricLogin}
+                      >
+                        <Ionicons name="finger-print-sharp" size={wp(80)} color="#0A1F4A" />
+                        <Text style={styles.biometricButtonText}>Tap to Scan {biometricType}</Text>
+                      </TouchableOpacity>
 
-                  {/* Email */}
-                  <View style={styles.inputLabelContainer}>
-                    <Text style={styles.inputLabel}>Email Address</Text>
-                  </View>
-                  <View style={styles.field}>
-                    <Icon name="envelope-o" size={wp(18)} color={'#0A1F4A'} />
-                    <TextInput
-                      placeholder="Enter your email"
-                      placeholderTextColor="#5A6272"
-                      style={styles.input}
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!isLoading}
-                      returnKeyType="next"
-                      onSubmitEditing={() => passwordRef.current?.focus()}
-                      blurOnSubmit={false}
-                    />
-                  </View>
+                      <TouchableOpacity 
+                        style={styles.usePasswordLink}
+                        onPress={() => setShowUnlockModeUI(false)}
+                      >
+                        <Text style={styles.usePasswordText}>Use password instead</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={styles.heading}>Login</Text>
 
-                  {/* Password */}
-                  <View style={styles.inputLabelContainer}>
-                    <Text style={styles.inputLabel}>Password</Text>
-                  </View>
-                  <View style={styles.field}>
-                    <Icon1
-                      name="lock-closed-outline"
-                      size={wp(18)}
-                      color={'#0A1F4A'}
-                    />
-                    <TextInput
-                      ref={passwordRef}
-                      placeholder="Enter your password"
-                      placeholderTextColor="#5A6272"
-                      secureTextEntry={!isPasswordVisible}
-                      style={styles.input}
-                      value={password}
-                      onChangeText={setPassword}
-                      editable={!isLoading}
-                      returnKeyType="done"
-                      onSubmitEditing={handleLogin}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                      disabled={isLoading}
-                    >
-                      <Icon1
-                        name={
-                          isPasswordVisible ? 'eye-outline' : 'eye-off-outline'
-                        }
-                        size={wp(20)}
-                        color={'#0A1F4A'}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                      {/* Email */}
+                      <View style={styles.inputLabelContainer}>
+                        <Text style={styles.inputLabel}>Email Address</Text>
+                      </View>
+                      <View style={styles.field}>
+                        <Icon name="envelope-o" size={wp(18)} color={'#0A1F4A'} />
+                        <TextInput
+                          placeholder="Enter your email"
+                          placeholderTextColor="#5A6272"
+                          style={styles.input}
+                          value={email}
+                          onChangeText={setEmail}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          editable={!isLoading}
+                          returnKeyType="next"
+                          onSubmitEditing={() => passwordRef.current?.focus()}
+                          blurOnSubmit={false}
+                        />
+                      </View>
 
-                  {/* Login Button */}
-                  <View style={styles.btnRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.button,
-                        (isLoading || isSubmitting) && styles.buttonDisabled,
-                      ]}
-                      onPress={handleLogin}
-                      disabled={isLoading || isSubmitting}
-                      activeOpacity={0.8}
-                    >
-                      {isLoading || isSubmitting ? (
-                        <View style={styles.loadingContainer}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                          <Text style={[styles.btnText, styles.btnTextSpacing]}>
-                            {loadingMessage}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.btnText}>Login</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+                      {/* Password */}
+                      <View style={styles.inputLabelContainer}>
+                        <Text style={styles.inputLabel}>Password</Text>
+                      </View>
+                      <View style={styles.field}>
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={wp(18)}
+                          color={'#0A1F4A'}
+                        />
+                        <TextInput
+                          ref={passwordRef}
+                          placeholder="Enter your password"
+                          placeholderTextColor="#5A6272"
+                          secureTextEntry={!isPasswordVisible}
+                          style={styles.input}
+                          value={password}
+                          onChangeText={setPassword}
+                          editable={!isLoading}
+                          returnKeyType="done"
+                          onSubmitEditing={handleLogin}
+                        />
+                        <TouchableOpacity
+                          onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                          disabled={isLoading}
+                        >
+                          <Ionicons
+                            name={
+                              isPasswordVisible ? 'eye-outline' : 'eye-off-outline'
+                            }
+                            size={wp(20)}
+                            color={'#0A1F4A'}
+                          />
+                        </TouchableOpacity>
+                      </View>
 
+                      {/* Login Button */}
+                      <View style={styles.btnRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.button,
+                            (isLoading || isSubmitting) && styles.buttonDisabled,
+                          ]}
+                          onPress={handleLogin}
+                          disabled={isLoading || isSubmitting}
+                          activeOpacity={0.8}
+                        >
+                          {isLoading || isSubmitting ? (
+                            <View style={styles.loadingContainer}>
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <Text style={[styles.btnText, styles.btnTextSpacing]}>
+                                {loadingMessage}
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.btnText}>Login</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+
+                    </>
+                  )}
                 </View>
               </Animated.View>
             )}
@@ -590,6 +723,60 @@ const useStyles = createThemedStyles(
         shadowOpacity: 0.3,
         shadowRadius: wp(4.65),
         elevation: 8,
+      },
+      unlockContainer: {
+        alignItems: 'center',
+        paddingVertical: spacing.lg,
+      },
+      unlockSubtitle: {
+        color: '#fff',
+        fontSize: fp(14),
+        textAlign: 'center',
+        opacity: 0.8,
+        marginBottom: spacing.xl,
+      },
+      biometricBigButton: {
+        backgroundColor: '#fff',
+        width: wp(160),
+        height: wp(160),
+        borderRadius: wp(80),
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginVertical: spacing.xl,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 8,
+      },
+      biometricButtonText: {
+        color: '#0A1F4A',
+        fontSize: fp(12),
+        fontWeight: '600',
+        marginTop: spacing.sm,
+      },
+      usePasswordLink: {
+        marginTop: spacing.xl,
+        padding: spacing.sm,
+      },
+      usePasswordText: {
+        color: '#fff',
+        fontSize: fp(14),
+        textDecorationLine: 'underline',
+        opacity: 0.9,
+      },
+      biometricLink: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: spacing.xl,
+        padding: spacing.sm,
+      },
+      biometricLinkText: {
+        color: '#fff',
+        fontSize: fp(14),
+        marginLeft: spacing.sm,
+        fontWeight: '600',
       },
     };
   },

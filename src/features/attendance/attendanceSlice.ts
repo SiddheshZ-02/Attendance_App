@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { API_CONFIG, apiCall } from '../../services/api/apiConfig';
 import { setSessionExpired } from '../auth/authSlice';
-import { getAuthToken } from '../../utils/auth';
+import { RootState } from '../../store';
 import { calculateTotalHours } from '../../utils/time';
 
 type AttendanceStats = {
@@ -63,7 +63,8 @@ type TodayAttendancePayload = {
 export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | null>(
   'attendance/fetchToday',
   async (_, thunkAPI) => {
-    const token = await getAuthToken();
+    const state = thunkAPI.getState() as RootState;
+    const token = state.auth.token;
     if (!token) return null;
     try {
       const data: any = await apiCall(
@@ -98,7 +99,8 @@ export const fetchTodayAttendance = createAsyncThunk<TodayAttendancePayload | nu
 export const fetchOfficeLocations = createAsyncThunk<OfficeLocation[] | null>(
   'attendance/fetchOfficeLocations',
   async (_, thunkAPI) => {
-    const token = await getAuthToken();
+    const state = thunkAPI.getState() as RootState;
+    const token = state.auth.token;
     if (!token) return null;
     try {
       const data: any = await apiCall(
@@ -141,7 +143,8 @@ export const logAttendance = createAsyncThunk<
   LogAttendanceArgs,
   { rejectValue: LogAttendanceError }
 >('attendance/logAttendance', async (payload, thunkAPI) => {
-  const token = await getAuthToken();
+  const state = thunkAPI.getState() as RootState;
+  const token = state.auth.token;
   if (!token) {
     return thunkAPI.rejectWithValue({
       message: 'Not authenticated. Please login again.',

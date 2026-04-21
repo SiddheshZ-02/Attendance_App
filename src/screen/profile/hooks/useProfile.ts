@@ -4,12 +4,14 @@ import { useNavigation } from '@react-navigation/native';
 import * as Keychain from 'react-native-keychain';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppDispatch, useAppSelector } from '../../../hooks/reduxHooks';
-import { validateSession, logout, logoutAllDevices } from '../../../features/auth/authSlice';
+import { validateSession, logout, logoutAllDevices, setBiometricEnabled as setReduxBiometricEnabled } from '../../../features/auth/authSlice';
 import { resetAttendance } from '../../../features/attendance/attendanceSlice';
 import { STORAGE_KEYS } from '../../../constants/app';
 import {
   getSupportedBiometryLabel,
-  migrateKeychainFromBiometric,
+  getBiometricAppLockEnabled,
+  hasSavedCredentials,
+  migrateKeychainFromBiometricSilent,
   migrateKeychainToBiometricIfNeeded,
   peekKeychainPasswordJson,
   setBiometricAppLockEnabled,
@@ -59,13 +61,13 @@ export const useProfile = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const v = await AsyncStorage.getItem(STORAGE_KEYS.BIOMETRIC_APP_LOCK);
-      const hasCreds = Boolean(await peekKeychainPasswordJson());
+      const isEnabled = await getBiometricAppLockEnabled();
+      const hasCreds = await hasSavedCredentials();
       if (!cancelled) {
-        setBiometricEnabled(v === '1');
+        setBiometricEnabled(isEnabled);
         const label = await getSupportedBiometryLabel();
         if (!cancelled) setBiometricLabel(label);
-        if (!hasCreds && v === '1') {
+        if (!hasCreds && isEnabled) {
           await setBiometricAppLockEnabled(false);
           if (!cancelled) setBiometricEnabled(false);
         }
@@ -105,12 +107,18 @@ export const useProfile = () => {
             return;
           }
           setBiometricEnabled(true);
+          dispatch(setReduxBiometricEnabled(true));
         } else {
-          const ok = await migrateKeychainFromBiometric();
+          // Silent off: use current tokens from state to avoid hardware prompt
+          const ok = await migrateKeychainFromBiometricSilent({
+            token: auth.token || '',
+            refreshToken: auth.refreshToken || '',
+          });
           if (!ok) {
             await setBiometricAppLockEnabled(false);
           }
           setBiometricEnabled(false);
+          dispatch(setReduxBiometricEnabled(false));
         }
       } finally {
         setBiometricBusy(false);
@@ -164,9 +172,13 @@ export const useProfile = () => {
   const onRefresh = async () => {
     try {
       setRefreshing(true);
-      await dispatch(validateSession()).unwrap();
+      const result = await dispatch(validateSession()).unwrap();
+      if (!result) {
+        // Session invalid - handled by reducer state change
+      }
     } catch {
-      // fail silently — user can retry with another pull-to-refresh
+      // Validation failed - do NOT trigger biometric or session expired modal
+      // This handles user cancel of biometric or network errors gracefully
     } finally {
       setRefreshing(false);
     }

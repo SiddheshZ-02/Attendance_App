@@ -3,7 +3,7 @@ import { Attendance_API_TIMEOUT } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../constants/app';
 import { store } from '../../store';
-import { setSessionExpired } from '../../features/auth/authSlice';
+import { setSessionExpired, setTokens } from '../../features/auth/authSlice';
 import { clearAuthCredentials } from '../auth/secureCredentials';
 import { ensureFreshAccessToken, performTokenRefresh } from './tokenRefresh';
 
@@ -19,6 +19,7 @@ const STORAGE_CLEAR_KEYS = [
   STORAGE_KEYS.USER_ROLE,
   STORAGE_KEYS.EMPLOYEE_ID,
   STORAGE_KEYS.DEPARTMENT,
+  STORAGE_KEYS.BIOMETRIC_APP_LOCK,
 ];
 
 /** Server said re-login — do not attempt refresh. */
@@ -36,6 +37,7 @@ const NO_REFRESH_ATTEMPT = new Set([
   'USER_NOT_FOUND',
   'NO_TOKEN',
   'INSUFFICIENT_PERMISSIONS',
+  'LOGIN_ERROR',
 ]);
 
 const SESSION_FATAL_CODES = new Set([
@@ -55,10 +57,17 @@ const doFetch = async (url: string, options: RequestInit, timeoutMs: number) => 
   }
 };
 
-async function purgeLocalSession(message: string) {
-  await clearAuthCredentials();
-  await AsyncStorage.multiRemove(STORAGE_CLEAR_KEYS);
-  store.dispatch(setSessionExpired({ message }));
+export async function purgeLocalSession(message: string, isIntentionalLogout = false) {
+  try {
+    await clearAuthCredentials();
+    await AsyncStorage.multiRemove(STORAGE_CLEAR_KEYS);
+    store.dispatch(setSessionExpired({ 
+      message,
+      isIntentionalLogout 
+    }));
+  } catch (err) {
+    console.error('Error during purgeLocalSession:', err);
+  }
 }
 
 export const apiCall = async (
@@ -80,12 +89,18 @@ export const apiCall = async (
       message: 'API base URL is not configured. Set Attendance_API_BASE_URL in .env',
     };
   }
-  const timeoutMs = Number(Attendance_API_TIMEOUT) || 12000;
+  // Increased timeout to 30s to handle Render's "cold start" (sleeping servers)
+  const timeoutMs = Number(Attendance_API_TIMEOUT) || 30000;
 
   const exec = async (authToken?: string | null) => {
     const h = { ...headers } as Record<string, string>;
     if (authToken) h.Authorization = `Bearer ${authToken}`;
-    const resp = await doFetch(`${base}${endpoint}`, { ...options, headers: h }, timeoutMs);
+
+    // Ensure endpoint starts with / and join with base
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${base}${normalizedEndpoint}`;
+
+    const resp = await doFetch(url, { ...options, headers: h }, timeoutMs);
     let data: any = null;
     try {
       data = await resp.json();
@@ -96,9 +111,12 @@ export const apiCall = async (
   };
 
   try {
+    const state = store.getState();
+    const refreshToken = state.auth.refreshToken;
     let authToken = token;
+    
     if (authToken) {
-      authToken = await ensureFreshAccessToken(authToken);
+      authToken = await ensureFreshAccessToken(authToken, refreshToken);
     }
 
     let { resp, data } = await exec(authToken);
@@ -122,39 +140,50 @@ export const apiCall = async (
 
     if (NO_REFRESH_ATTEMPT.has(code)) {
       await purgeLocalSession(
-        data?.message || 'Session ended. Your account was used on another platform',
+        data?.message || 'Your session has ended. Please log in again.',
       );
       throw { code, message: data?.message || 'Not authorized.' };
     }
 
-    const rotated = await performTokenRefresh();
+    const rotated = await performTokenRefresh(refreshToken || undefined);
     if (rotated?.token) {
+      // Update state with new tokens
+      store.dispatch(setTokens({ token: rotated.token, refreshToken: rotated.refreshToken }));
+      
       ({ resp, data } = await exec(rotated.token));
       if (resp.status !== 401) {
         return data;
       }
       const code2 = data?.code || 'SESSION_REVOKED';
       await purgeLocalSession(
-        data?.message || 'Session ended. Your account was used on another platform',
+        data?.message || 'Your session has ended. Please log in again.',
       );
       throw { code: code2, message: data?.message || 'Session invalid.' };
     }
 
     await purgeLocalSession(
-      data?.message || 'Session ended. Your account was used on another platform',
+      data?.message || 'Your session has ended. Please log in again.',
     );
     throw { code, message: data?.message || 'Not authorized.' };
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw { code: 'REQUEST_TIMEOUT', message: 'Request timed out. Please try again.' };
+      throw { code: 'REQUEST_TIMEOUT', message: 'Request timed out. Please check your internet and try again.' };
     }
+
+    if (error?.message === 'Network request failed' || error?.name === 'TypeError') {
+      throw { 
+        code: 'NETWORK_ERROR', 
+        message: 'Network connection failed. Please check your internet or API URL.' 
+      };
+    }
+
     if (
       token &&
       SESSION_FATAL_CODES.has(error?.code) &&
       !store.getState().auth.sessionExpired
     ) {
       await purgeLocalSession(
-        error?.message || 'Session ended. Your account was used on another platform',
+        error?.message || 'Your session has ended. Please log in again.',
       );
     }
     console.error('API call error:', error);
