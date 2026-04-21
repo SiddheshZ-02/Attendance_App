@@ -7,7 +7,9 @@ export const STORAGE_KEYS = {
   USER_EMAIL: 'userEmail',
   USER_ROLE: 'userRole',
   EMPLOYEE_ID: 'employeeId',
-  DEPARTMENT: 'department'
+  DEPARTMENT: 'department',
+  /** `'1'` = Keychain items require Face ID / fingerprint / device PIN to read */
+  BIOMETRIC_APP_LOCK: 'biometricAppLockEnabled',
 };
 
 export const PERMISSIONS = {

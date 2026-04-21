@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
 import { useProfile } from './hooks/useProfile';
 import ProfileHeader from './components/ProfileHeader';
 import ProfileForm from './components/ProfileForm';
@@ -16,7 +23,12 @@ const Profile = () => {
     showLogoutModal,
     setShowLogoutModal,
     confirmLogout,
+    confirmLogoutAllDevices,
     navigation,
+    biometricEnabled,
+    biometricLabel,
+    biometricBusy,
+    onToggleBiometric,
   } = useProfile();
 
   const styles = useStyles();
@@ -50,7 +62,22 @@ const Profile = () => {
         styles={styles}
       />
 
-      <ProfileForm user={user} styles={styles} />
+      <ProfileForm
+        user={user}
+        styles={styles}
+        biometricEnabled={biometricEnabled}
+        biometricLabel={biometricLabel}
+        biometricBusy={biometricBusy}
+        onBiometricToggle={onToggleBiometric}
+      />
+
+      <TouchableOpacity
+        style={styles.logoutAllLink}
+        onPress={confirmLogoutAllDevices}
+        disabled={isLoggingOut}
+      >
+        <Text style={styles.logoutAllLinkText}>Sign out all devices</Text>
+      </TouchableOpacity>
 
       <LogoutModal
         visible={showLogoutModal}
@@ -107,6 +134,23 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
       fontWeight: '600',
     },
     bottomContainer: { padding: spacing.md  },
+    biometricRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+      paddingVertical: spacing.sm,
+    },
+    biometricTitle: {
+      fontSize: fp(16),
+      fontWeight: '600',
+      color: '#0E3A6E',
+      marginBottom: hp(4),
+    },
+    biometricHint: {
+      fontSize: fp(12),
+      color: '#6B7280',
+      lineHeight: fp(18),
+    },
     sectionTitle: {
       fontSize: fp(18),
       marginBottom: spacing.md,
@@ -134,6 +178,19 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
       color: "#2A7A99",
     },
     readOnly: { backgroundColor: "#fff", color: "#0E3A6E", fontWeight: '500' },
+    logoutAllLink: {
+      alignSelf: 'center',
+      marginTop: hp(8),
+      marginBottom: hp(16),
+      paddingVertical: hp(8),
+      paddingHorizontal: spacing.md,
+    },
+    logoutAllLinkText: {
+      fontSize: fp(15),
+      color: '#B91C1C',
+      fontWeight: '600',
+      textDecorationLine: 'underline',
+    },
 
     // ── Modal ──────────────────────────────────────────────────────
     modalOverlay: {

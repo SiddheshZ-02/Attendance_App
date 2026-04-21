@@ -1,16 +1,9 @@
-import * as Keychain from 'react-native-keychain';
+import { loadAuthTokens } from '../services/auth/secureCredentials';
 
 /**
- * Retrieves the auth token securely from react-native-keychain.
- * Returns null if no credentials are stored.
+ * Current access token from secure storage (Face ID / PIN when biometric lock is on).
  */
 export const getAuthToken = async (): Promise<string | null> => {
-  try {
-    const credentials = await Keychain.getGenericPassword();
-    if (!credentials) return null;
-    const parsed = JSON.parse(credentials.password);
-    return parsed.token ?? null;
-  } catch {
-    return null;
-  }
+  const creds = await loadAuthTokens();
+  return creds?.token ?? null;
 };

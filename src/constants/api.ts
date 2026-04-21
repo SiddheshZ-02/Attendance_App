@@ -9,7 +9,8 @@ export const API_ENDPOINTS = {
     REGISTER: '/api/auth/register',
     PROFILE: '/api/auth/profile',
     LOGOUT: '/api/auth/logout',
-    REFRESH: '/api/auth/refresh'
+    LOGOUT_ALL: '/api/auth/logout-all',
+    REFRESH: '/api/auth/refresh',
   },
   ATTENDANCE: {
     CHECK_IN: '/api/attendance/checkin',

@@ -16,7 +16,7 @@ const SessionExpiredModal = () => {
 
   useEffect(() => {
     if (sessionExpired) {
-      toast.show('Session Expire', {
+      toast.show('Session ended', {
         type: 'warning',
         placement: 'top',
         duration: 3000,
@@ -62,7 +62,7 @@ const SessionExpiredModal = () => {
           
           <Text style={styles.title}>Session Expired</Text>
           <Text style={styles.message}>
-            {sessionExpiredMessage || 'For your security, you have been logged out due to session inactivity or expiry.'}
+            {sessionExpiredMessage || 'Session ended. Your account was used on another platform'}
           </Text>
           
           <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={handleOk}>

@@ -9,6 +9,7 @@ import { store } from './src/store';
 import { StyleSheet } from 'react-native';
 import { navigationRef } from './src/navigation/navigationRef';
 import SessionExpiredModal from './src/components/SessionExpiredModal';
+import SessionLifecycle from './src/components/SessionLifecycle';
 import { AppSystemProvider } from './src/utils/responsive';
 
 const Stack = createNativeStackNavigator();
@@ -22,6 +23,7 @@ const App = () => {
             <NavigationContainer ref={navigationRef}>
               <ToastProvider>
                 <SessionExpiredModal />
+                <SessionLifecycle />
                 <Stack.Navigator screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="Index" component={Index} />
                 </Stack.Navigator>
