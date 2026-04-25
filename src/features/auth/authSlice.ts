@@ -17,6 +17,7 @@ export interface User {
   department?: string;
   phone?: string;
   position?: string;
+  profilePicture?: string;
 }
 
 interface AuthState {
@@ -82,6 +83,7 @@ const userStoragePairs = (data: {
   role?: string;
   employeeId?: string;
   department?: string;
+  profilePicture?: string;
 }) =>
   [
     [STORAGE_KEYS.USER_ID, data._id],
@@ -90,6 +92,7 @@ const userStoragePairs = (data: {
     [STORAGE_KEYS.USER_ROLE, data.role || ''],
     [STORAGE_KEYS.EMPLOYEE_ID, data.employeeId || ''],
     [STORAGE_KEYS.DEPARTMENT, data.department || ''],
+    [STORAGE_KEYS.USER_PROFILE_PICTURE, data.profilePicture || ''],
   ] as [string, string][];
 
 export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: LoginError }>(
@@ -128,6 +131,7 @@ export const login = createAsyncThunk<LoginResult, LoginArgs, { rejectValue: Log
           department: data.data.department,
           phone: data.data.phone || data.data.phoneNumber,
           position: data.data.position || '',
+          profilePicture: data.data.profilePicture || '',
         };
 
         await persistAuthTokens(
@@ -176,6 +180,7 @@ export const bootstrapSession = createAsyncThunk<{ token: string; refreshToken: 
         STORAGE_KEYS.USER_ROLE,
         STORAGE_KEYS.EMPLOYEE_ID,
         STORAGE_KEYS.DEPARTMENT,
+        STORAGE_KEYS.USER_PROFILE_PICTURE,
       ]);
       const kv: Record<string, string> = {};
       stored.forEach(([k, v]) => {
@@ -191,6 +196,7 @@ export const bootstrapSession = createAsyncThunk<{ token: string; refreshToken: 
         role: kv[STORAGE_KEYS.USER_ROLE] || '',
         employeeId: kv[STORAGE_KEYS.EMPLOYEE_ID] || '',
         department: kv[STORAGE_KEYS.DEPARTMENT] || '',
+        profilePicture: kv[STORAGE_KEYS.USER_PROFILE_PICTURE] || '',
       };
 
       return { token: creds.token, refreshToken: creds.refreshToken, user };
@@ -234,6 +240,7 @@ export const validateSession = createAsyncThunk<ValidateSessionResult, string | 
           department: data.data.department || '',
           phone: data.data.phone || data.data.phoneNumber || '',
           position: data.data.position || '',
+          profilePicture: data.data.profilePicture || '',
         };
 
         await AsyncStorage.multiSet([
@@ -242,6 +249,7 @@ export const validateSession = createAsyncThunk<ValidateSessionResult, string | 
           [STORAGE_KEYS.USER_ROLE, user.role || ''],
           [STORAGE_KEYS.EMPLOYEE_ID, user.employeeId || ''],
           [STORAGE_KEYS.DEPARTMENT, user.department || ''],
+          [STORAGE_KEYS.USER_PROFILE_PICTURE, user.profilePicture || ''],
         ]);
 
         // After apiCall, the token might have been refreshed in state
@@ -283,6 +291,43 @@ export const logoutAllDevices = createAsyncThunk('auth/logoutAllDevices', async 
   }
 });
 
+export const updateProfilePicture = createAsyncThunk<
+  { profilePicture: string },
+  { uri: string; type: string; name: string },
+  { rejectValue: { message: string } }
+>('auth/updateProfilePicture', async (image, thunkAPI) => {
+  const formData = new FormData();
+  formData.append('image', {
+    uri: image.uri,
+    type: image.type,
+    name: image.name,
+  } as any);
+
+  try {
+    const data = await apiCall(
+      API_CONFIG.ENDPOINTS.AUTH.PROFILE_PICTURE,
+      'PUT',
+      formData,
+      null,
+      true, // isFormData
+    );
+
+    if (data.success) {
+      // Update local storage for profile picture if needed, or just rely on state
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_ID + '_profile_pic', data.data.profilePicture);
+      return data.data;
+    }
+
+    return thunkAPI.rejectWithValue({
+      message: data.message || 'Failed to upload profile picture',
+    });
+  } catch (error: any) {
+    return thunkAPI.rejectWithValue({
+      message: error?.message || 'Upload failed',
+    });
+  }
+});
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -296,9 +341,15 @@ const authSlice = createSlice({
     ) {
       if (action.payload) {
         state.sessionExpired = true;
-        state.sessionExpiredMessage =
-          action.payload.message || 'Your session has ended. Please log in again.';
+        state.sessionExpiredMessage = action.payload.message || 'Your session has ended.';
         state.isIntentionalLogout = action.payload.isIntentionalLogout || false;
+        
+        // CRITICAL: Clear tokens and user from memory immediately
+        // This prevents "automatic login" loops in AuthNavigator/Login.tsx
+        state.token = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.status = 'idle';
       } else {
         state.sessionExpired = false;
         state.sessionExpiredMessage = null;
@@ -391,6 +442,11 @@ const authSlice = createSlice({
         state.logoutStatus = 'failed';
         state.token = null;
         state.user = null;
+      })
+      .addCase(updateProfilePicture.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.profilePicture = action.payload.profilePicture;
+        }
       })
       .addCase(logoutAllDevices.pending, state => {
         state.logoutStatus = 'loading';

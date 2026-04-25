@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import * as Keychain from 'react-native-keychain';
 import { useProfile } from './hooks/useProfile';
@@ -31,6 +32,8 @@ const Profile = () => {
     biometricLabel,
     biometricBusy,
     onToggleBiometric,
+    handleUpdateProfilePicture,
+    isUploadingImage,
   } = useProfile();
 
   const styles = useStyles();
@@ -71,6 +74,8 @@ const Profile = () => {
         biometricLabel={biometricLabel}
         biometricBusy={biometricBusy}
         onBiometricToggle={onToggleBiometric}
+        onUpdateProfilePicture={handleUpdateProfilePicture}
+        isUploadingImage={isUploadingImage}
       />
 
       <TouchableOpacity
@@ -119,12 +124,54 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
       borderRadius: wp(20),
     },
     profileSection: {
+      alignItems: 'center',
       paddingVertical: spacing.xl,
+      borderBottomLeftRadius: radius.xl,
+      borderBottomRightRadius: radius.xl,
+    },
+    avatarContainer: {
+      position: 'relative',
+      width: wp(100),
+      height: wp(100),
+      borderRadius: wp(50),
       justifyContent: 'center',
       alignItems: 'center',
-      gap: hp(12),
+      backgroundColor: '#fff',
+      overflow: 'visible',
     },
-    name: { fontSize: fp(20), fontWeight: '600' , color: "#0E3A6E"},
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: wp(50),
+      resizeMode: 'cover',
+    },
+    editIconBadge: {
+      position: 'absolute',
+      bottom: hp(-16),
+      backgroundColor: '#4A90E2',
+      width: wp(40),
+      height: wp(40),
+      borderRadius: wp(20),
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 3,
+      borderColor: '#fff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 6,
+    },
+    uploadOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    name: { fontSize: fp(20), fontWeight: '600' , color: "#0E3A6E" , marginTop: spacing.lg },
     roleTag: {
       fontSize: fp(14),
       color: "#0E3A6E",
@@ -133,7 +180,7 @@ const useStyles = createThemedStyles((colors, { hp, wp, fp, radius, spacing }) =
       paddingVertical: spacing.xxs,
       borderRadius: radius.full,
       overflow: 'hidden',
-      fontWeight: '600',
+      marginTop: spacing.md,
     },
     bottomContainer: { padding: spacing.md  },
     biometricRow: {

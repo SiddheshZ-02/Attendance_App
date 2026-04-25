@@ -33,7 +33,11 @@ const SessionExpiredModal = () => {
   }, [sessionExpired, isIntentionalLogout, toast]);
 
   const handleOk = useCallback(async () => {
+    // 1. Clear the expiry state in Redux
     dispatch(setSessionExpired(null));
+    
+    // 2. Perform a hard reset of the navigation stack to the Auth stack
+    // This ensures we land on the Login screen without any "Checking Session" loops
     if (navigationRef.isReady()) {
       navigationRef.reset({
         index: 0,

@@ -34,6 +34,8 @@ export const useAttendance = () => {
   const [nearestOffice, setNearestOffice] = useState<string | null>(null);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
+  const [isCalculating, setIsCalculating] = useState(false);
+
   const isProcessing = useRef(false);
   // Single unified GPS watcher — replaces both distanceWatchId & gpsWarmupWatchId
   const gpsWatchId = useRef<number | null>(null);
@@ -95,6 +97,7 @@ export const useAttendance = () => {
 
   const updateDistance = useCallback(
     (lat: number, lng: number) => {
+      setIsCalculating(true);
       if (selectedMode === 'Office') {
         if (officeLocations && officeLocations.length > 0) {
           let minDistance = Infinity;
@@ -126,6 +129,7 @@ export const useAttendance = () => {
         setDistance(Math.round(d));
         setNearestOffice('Check-in Location');
       }
+      setIsCalculating(false);
     },
     [officeLocations, selectedMode, checkedIn, checkInLocation],
   );
@@ -148,7 +152,8 @@ export const useAttendance = () => {
       gpsWatchId.current = null;
     }
 
-    // Immediately get the best available position for instant feedback
+    // 1. FAST FEEDBACK: Try to get a cached location first
+    setIsCalculating(true);
     Geolocation.getCurrentPosition(
       position => {
         const { latitude, longitude, accuracy } = position.coords;
@@ -160,11 +165,13 @@ export const useAttendance = () => {
           timestamp: Date.now(),
         };
       },
-      () => {},
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      () => {
+        // Fallback silently if cached location fails
+      },
+      { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 },
     );
 
-    // Start a single unified watcher — low drain, high accuracy on movement
+    // 2. FINE ACCURACY: Start a single unified watcher — low drain, high accuracy on movement
     gpsWatchId.current = Geolocation.watchPosition(
       position => {
         const { latitude, longitude, accuracy } = position.coords;
@@ -181,7 +188,7 @@ export const useAttendance = () => {
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 5000,
-        distanceFilter: 5, // only callback if user moved more than 5 meters
+        distanceFilter: 3, // slightly more sensitive for better UX
       },
     );
   }, [hasLocationPermission, isGPSEnabled, updateDistance]);
@@ -205,16 +212,23 @@ export const useAttendance = () => {
     try {
       setIsFetchingToday(true);
 
+      // 1. Load saved work mode from storage for instant hydration
+      const savedMode = await AsyncStorage.getItem('lastSelectedWorkMode');
+      if (savedMode && !checkedIn) {
+        dispatch(setWorkMode(savedMode));
+      }
+
       // Check cached office locations — only refetch if older than 24 hours
       const cachedAt = await AsyncStorage.getItem('officeLocationsCachedAt');
       const isCacheValid = cachedAt
         ? Date.now() - parseInt(cachedAt, 10) < 24 * 60 * 60 * 1000
         : false;
 
+      let todayData;
       if (isCacheValid) {
-        await dispatch(fetchTodayAttendance()).unwrap();
+        todayData = await dispatch(fetchTodayAttendance()).unwrap();
       } else {
-        await Promise.all([
+        const [attendanceResult] = await Promise.all([
           dispatch(fetchTodayAttendance()).unwrap(),
           dispatch(fetchOfficeLocations())
             .unwrap()
@@ -225,13 +239,19 @@ export const useAttendance = () => {
               ),
             ),
         ]);
+        todayData = attendanceResult;
+      }
+
+      // 2. Precedence Logic: If API says we are checked in, its mode MUST override the saved one
+      if (todayData?.workMode) {
+        dispatch(setWorkMode(todayData.workMode));
       }
     } catch {
       // non-critical — attendance still loads on next refresh
     } finally {
       setIsFetchingToday(false);
     }
-  }, [dispatch]);
+  }, [dispatch, checkedIn]);
 
   const onRefresh = useCallback(async () => {
     try {
@@ -254,15 +274,13 @@ export const useAttendance = () => {
       return;
     }
 
-    if (selectedMode === 'Office' || (selectedMode === 'WFH' && checkedIn)) {
-      startDistanceTracking();
-    } else {
-      stopDistanceTracking();
-    }
+    // PROACTIVE TRACKING: Start tracking as soon as screen is active
+    // Even if mode isn't 'Office', we want to prime the GPS hardware.
+    // This reduces the delay when the user eventually switches to 'Office'.
+    startDistanceTracking();
+
     return () => stopDistanceTracking();
   }, [
-    selectedMode,
-    checkedIn,
     hasCheckedOut,
     startDistanceTracking,
     stopDistanceTracking,
@@ -509,6 +527,8 @@ export const useAttendance = () => {
   const handleSetWorkMode = (mode: string) => {
     dispatch(setWorkMode(mode));
     setShowDropdown(false);
+    // Persist the user's choice for next time
+    AsyncStorage.setItem('lastSelectedWorkMode', mode).catch(() => {});
   };
 
   return {
@@ -523,6 +543,7 @@ export const useAttendance = () => {
     isFetchingToday,
     refreshing,
     onRefresh,
+    isCalculating,
     cooldownLeft,
     checkedIn,
     hasCheckedOut,

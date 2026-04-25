@@ -2,7 +2,7 @@ import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import { Attendance_API_TIMEOUT } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../constants/app';
-import { store } from '../../store';
+import { store, GLOBAL_LOGOUT_ACTION } from '../../store';
 import { setSessionExpired, setTokens } from '../../features/auth/authSlice';
 import { clearAuthCredentials } from '../auth/secureCredentials';
 import { ensureFreshAccessToken, performTokenRefresh } from './tokenRefresh';
@@ -19,6 +19,7 @@ const STORAGE_CLEAR_KEYS = [
   STORAGE_KEYS.USER_ROLE,
   STORAGE_KEYS.EMPLOYEE_ID,
   STORAGE_KEYS.DEPARTMENT,
+  STORAGE_KEYS.USER_PROFILE_PICTURE,
   STORAGE_KEYS.BIOMETRIC_APP_LOCK,
 ];
 
@@ -57,14 +58,31 @@ const doFetch = async (url: string, options: RequestInit, timeoutMs: number) => 
   }
 };
 
+/**
+ * Industry Standard: Comprehensive session purging.
+ * 1. Clears local secure storage (Keychain/Keystore).
+ * 2. Clears shared preferences (AsyncStorage).
+ * 3. Resets Redux memory state.
+ */
 export async function purgeLocalSession(message: string, isIntentionalLogout = false) {
   try {
-    await clearAuthCredentials();
-    await AsyncStorage.multiRemove(STORAGE_CLEAR_KEYS);
-    store.dispatch(setSessionExpired({ 
-      message,
-      isIntentionalLogout 
-    }));
+    // 1. Clear disk storage first (async)
+    await Promise.all([
+      clearAuthCredentials(),
+      AsyncStorage.multiRemove(STORAGE_CLEAR_KEYS),
+    ]);
+
+    // 2. Clear memory state via Redux
+    if (isIntentionalLogout) {
+      // For intentional logout, we wipe EVERYTHING
+      store.dispatch({ type: GLOBAL_LOGOUT_ACTION });
+    } else {
+      // For expiration, we clear auth data but keep the expired flag for the UI
+      store.dispatch(setSessionExpired({ 
+        message,
+        isIntentionalLogout: false 
+      }));
+    }
   } catch (err) {
     console.error('Error during purgeLocalSession:', err);
   }
@@ -75,12 +93,19 @@ export const apiCall = async (
   method: string = 'GET',
   body: any = null,
   token: string | null = null,
+  isFormData: boolean = false,
 ) => {
-  const headers: { [key: string]: string } = { 'Content-Type': 'application/json' };
+  const headers: { [key: string]: string } = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const options: RequestInit = { method, headers };
-  if (body && method !== 'GET') options.body = JSON.stringify(body);
+  if (body && method !== 'GET') {
+    options.body = isFormData ? body : JSON.stringify(body);
+  }
 
   const base = API_CONFIG.BASE_URL;
   if (!base) {
@@ -113,7 +138,7 @@ export const apiCall = async (
   try {
     const state = store.getState();
     const refreshToken = state.auth.refreshToken;
-    let authToken = token;
+    let authToken = token || state.auth.token;
     
     if (authToken) {
       authToken = await ensureFreshAccessToken(authToken, refreshToken);

@@ -26,6 +26,7 @@ const Attendance = () => {
     isFetchingToday,
     refreshing,
     onRefresh,
+    isCalculating,
     cooldownLeft,
     checkedIn,
     hasCheckedOut,
@@ -101,7 +102,11 @@ const Attendance = () => {
               <Text style={[styles.dropdownItemText, styles.dropdownItemTextSelectedName]}>
                 {selectedModeData.label}
                 {!hasCheckedOut && (selectedMode === 'Office' || (selectedMode === 'WFH' && checkedIn)) && (
-                  distance !== null ? (
+                  isCalculating ? (
+                    <Text style={[styles.distanceText, { color: 'grey' }]}>
+                      {' '}(Calculating...)
+                    </Text>
+                  ) : distance !== null ? (
                     <Text style={[
                       styles.distanceText,
                       { color: distance <= 100 ? '#16A34A' : '#DC2626' }
@@ -118,11 +123,7 @@ const Attendance = () => {
             </View>
           )}
 
-          {locationAccuracy && locationAccuracy > 50 && (
-            <Text style={styles.accuracyWarning}>
-              ⚠️ Low GPS Accuracy ({Math.round(locationAccuracy)}m)
-            </Text>
-          )}
+        
 
           <AttendanceClock styles={styles} />
 

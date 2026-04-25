@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Keychain from 'react-native-keychain';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ImagePicker from 'react-native-image-crop-picker';
 import { useAppDispatch, useAppSelector } from '../../../hooks/reduxHooks';
-import { validateSession, logout, logoutAllDevices, setBiometricEnabled as setReduxBiometricEnabled } from '../../../features/auth/authSlice';
+import { validateSession, logout, logoutAllDevices, updateProfilePicture, setBiometricEnabled as setReduxBiometricEnabled } from '../../../features/auth/authSlice';
 import { resetAttendance } from '../../../features/attendance/attendanceSlice';
 import { STORAGE_KEYS } from '../../../constants/app';
 import {
@@ -29,8 +30,40 @@ export const useProfile = () => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState<string | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const user = auth.user;
+
+  const handleUpdateProfilePicture = useCallback(async () => {
+    try {
+      const image = await ImagePicker.openPicker({
+        width: 400,
+        height: 400,
+        cropping: true,
+        compressImageQuality: 0.7,
+        mediaType: 'photo',
+      });
+
+      if (image) {
+        setIsUploadingImage(true);
+        const fileName = image.path.split('/').pop() || `profile-${Date.now()}.jpg`;
+        
+        await dispatch(updateProfilePicture({
+          uri: Platform.OS === 'android' ? image.path : image.path.replace('file://', ''),
+          type: image.mime,
+          name: fileName,
+        })).unwrap();
+        
+        Alert.alert('Success', 'Profile picture updated successfully');
+      }
+    } catch (error: any) {
+      if (error?.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', error?.message || 'Failed to update profile picture');
+      }
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }, [dispatch]);
 
   useEffect(() => {
     if (!auth.token) {
@@ -199,5 +232,7 @@ export const useProfile = () => {
     biometricLabel,
     biometricBusy,
     onToggleBiometric,
+    handleUpdateProfilePicture,
+    isUploadingImage,
   };
 };

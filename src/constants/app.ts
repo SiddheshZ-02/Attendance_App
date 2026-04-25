@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   USER_ROLE: 'userRole',
   EMPLOYEE_ID: 'employeeId',
   DEPARTMENT: 'department',
+  USER_PROFILE_PICTURE: 'userProfilePicture',
   /** `'1'` = Keychain items require Face ID / fingerprint / device PIN to read */
   BIOMETRIC_APP_LOCK: 'biometricAppLockEnabled',
 };
