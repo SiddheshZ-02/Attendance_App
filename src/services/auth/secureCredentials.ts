@@ -139,9 +139,13 @@ export async function persistAuthTokens(
   }
 }
 
-export async function clearAuthCredentials(): Promise<void> {
+export async function clearAuthCredentials(
+  clearConfig: boolean = true,
+): Promise<void> {
   await Keychain.resetGenericPassword();
-  await Keychain.resetGenericPassword({ service: CONFIG_KEYCHAIN_SERVICE });
+  if (clearConfig) {
+    await Keychain.resetGenericPassword({ service: CONFIG_KEYCHAIN_SERVICE });
+  }
 }
 
 /** After enabling biometrics: re-save current tokens with hardware protection. */

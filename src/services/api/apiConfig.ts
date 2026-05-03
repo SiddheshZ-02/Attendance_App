@@ -67,9 +67,13 @@ const doFetch = async (url: string, options: RequestInit, timeoutMs: number) => 
 export async function purgeLocalSession(message: string, isIntentionalLogout = false) {
   try {
     // 1. Clear disk storage first (async)
+    const keysToClear = isIntentionalLogout
+      ? STORAGE_CLEAR_KEYS
+      : STORAGE_CLEAR_KEYS.filter(k => k !== STORAGE_KEYS.BIOMETRIC_APP_LOCK);
+
     await Promise.all([
-      clearAuthCredentials(),
-      AsyncStorage.multiRemove(STORAGE_CLEAR_KEYS),
+      clearAuthCredentials(isIntentionalLogout),
+      AsyncStorage.multiRemove(keysToClear),
     ]);
 
     // 2. Clear memory state via Redux

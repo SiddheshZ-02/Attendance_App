@@ -4,6 +4,8 @@ import { useNavigation } from '@react-navigation/native';
 import * as Keychain from 'react-native-keychain';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImagePicker from 'react-native-image-crop-picker';
+import { useToast } from 'react-native-toast-notifications';
+
 import { useAppDispatch, useAppSelector } from '../../../hooks/reduxHooks';
 import { validateSession, logout, logoutAllDevices, updateProfilePicture, setBiometricEnabled as setReduxBiometricEnabled } from '../../../features/auth/authSlice';
 import { resetAttendance } from '../../../features/attendance/attendanceSlice';
@@ -21,6 +23,7 @@ import {
 export const useProfile = () => {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
+  const toast = useToast();
   const auth = useAppSelector(state => state.auth);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +57,8 @@ export const useProfile = () => {
           name: fileName,
         })).unwrap();
         
-        Alert.alert('Success', 'Profile picture updated successfully');
+        toast.show('Profile picture updated successfully', { type: 'success',   placement: 'top',
+          duration: 3000, });
       }
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {

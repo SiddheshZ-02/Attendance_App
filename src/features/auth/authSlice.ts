@@ -41,7 +41,7 @@ const initialState: AuthState = {
   user: null,
   status: 'idle',
   error: null,
-  checkingSession: true,
+  checkingSession: false,
   logoutStatus: 'idle',
   sessionExpired: false,
   sessionExpiredMessage: null,
